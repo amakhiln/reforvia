@@ -12,6 +12,7 @@ import { DAY_NAMES, formatLongDate, isoWeekday, localISO, startOfWeekISO } from 
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getSupabase } from "@/lib/supabase/client";
 import { startWorkout } from "@/lib/workouts";
+import { prefetchBundle, primeBundle } from "@/lib/workoutBundle";
 import type { ProgramSession, Workout } from "@/lib/types";
 
 export function TodayClient() {
@@ -44,10 +45,20 @@ export function TodayClient() {
       if (wErr) throw wErr;
       setSessions((s ?? []) as ProgramSession[]);
       setWorkouts((w ?? []) as Workout[]);
+
+      // Warm up today's workouts so tapping one opens instantly.
+      const todayIds = new Set(((s ?? []) as ProgramSession[]).filter((x) => x.day_of_week === today).map((x) => x.id));
+      for (const wk of (w ?? []) as Workout[]) {
+        if (wk.session_id && todayIds.has(wk.session_id)) {
+          prefetchBundle(wk.id);
+          router.prefetch(`/workout/${wk.id}`);
+        }
+      }
+      router.prefetch("/workout/new"); // loads the workout screen's code before a new workout is started
     } catch (e) {
       setError(e instanceof Error ? e.message : (e as { message?: string })?.message ?? "Failed to load");
     }
-  }, []);
+  }, [router, today]);
 
   const retry = useCallback(() => {
     setError(null);
@@ -71,7 +82,13 @@ export function TodayClient() {
     setPendingId(session.id);
     try {
       const existing = workoutFor.get(session.id);
-      const id = existing ? existing.id : await startWorkout(session.id, session.name);
+      let id: string;
+      if (existing) id = existing.id;
+      else {
+        const bundle = await startWorkout(session.id);
+        primeBundle(bundle); // the workout screen renders from this, with no second fetch
+        id = bundle.workout.id;
+      }
       // Stay "busy" until the next screen has rendered; this view unmounts when it does.
       startTransition(() => router.push(`/workout/${id}`));
     } catch (e) {

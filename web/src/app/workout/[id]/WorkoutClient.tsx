@@ -10,6 +10,7 @@ import type { SetValues } from "@/components/SetRow";
 import { formatLongDate } from "@/lib/dates";
 import { defaultRestSeconds } from "@/lib/progression";
 import { getSupabase } from "@/lib/supabase/client";
+import { fetchBundle, takeBundle } from "@/lib/workoutBundle";
 import type { PreviousSet, SetLog, Workout, WorkoutExercise } from "@/lib/types";
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : ((e as { message?: string })?.message ?? "Unknown error"));
@@ -31,30 +32,15 @@ export function WorkoutClient() {
       const { data: auth } = await sb.auth.getSession();
       userId.current = auth.session?.user.id ?? null;
 
-      const [{ data: w, error: wErr }, { data: list, error: lErr }] = await Promise.all([
-        sb.from("workouts").select("*").eq("id", id).single(),
-        sb
-          .from("workout_exercises")
-          .select("*, exercises(*, exercise_media(*)), planned_exercises(*), set_logs(*)")
-          .eq("workout_id", id)
-          .order("sort_order"),
-      ]);
-      if (wErr) throw wErr;
-      if (lErr) throw lErr;
-      const rows = ((list ?? []) as WorkoutExercise[]).map((r) => ({
+      const bundle = takeBundle(id) ?? (await fetchBundle(id));
+      const rows = bundle.items.map((r) => ({
         ...r,
         set_logs: [...(r.set_logs ?? [])].sort((a, b) => a.set_number - b.set_number),
       }));
-
-      const { data: prev, error: pErr } = await sb.rpc("previous_sets", {
-        p_exercise_ids: rows.map((r) => r.exercise_id),
-        p_exclude_workout: id,
-      });
-      if (pErr) throw pErr;
       const grouped: Record<string, PreviousSet[]> = {};
-      for (const p of (prev ?? []) as PreviousSet[]) (grouped[p.exercise_id] ??= []).push(p);
+      for (const p of bundle.previous) (grouped[p.exercise_id] ??= []).push(p);
 
-      setWorkout(w as Workout);
+      setWorkout(bundle.workout);
       setItems(rows);
       setPrevious(grouped);
       setOpenId((cur) => cur ?? rows.find((r) => !r.completed)?.id ?? null);
