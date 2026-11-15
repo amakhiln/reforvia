@@ -7,7 +7,7 @@ const publicUrl = (path: string) => `${SUPABASE_URL}/storage/v1/object/public/ex
 export function ExerciseMedia({ exercise }: { exercise: Exercise }) {
   const media = [...(exercise.exercise_media ?? [])].sort((a, b) => a.sort_order - b.sort_order);
   const wger = exercise.source === "wger";
-  if (media.length === 0 && !wger) return null;
+  if (media.length === 0 && !wger) return null; // wger text needs its credit even without media
   const credit = (author: string | null, license: string | null) => [author, license].filter(Boolean).join(" · ");
   return (
     <div className="space-y-3">
@@ -22,15 +22,18 @@ export function ExerciseMedia({ exercise }: { exercise: Exercise }) {
           {credit(m.author, m.license) && <figcaption className="tag px-3 py-2 text-muted">{credit(m.author, m.license)}</figcaption>}
         </figure>
       ))}
-      {wger && (
-        <p className="tag text-muted">
-          Source:{" "}
-          <a href={exercise.source_url ?? "https://wger.de"} target="_blank" rel="noopener noreferrer" className="text-accent underline">
-            wger.de
-          </a>
-          {credit(exercise.author ?? null, exercise.license ?? null) ? ` · ${credit(exercise.author ?? null, exercise.license ?? null)}` : ""}
-        </p>
-      )}
+      <p className="tag text-muted">
+        {wger ? "Source: " : "Demo media from "}
+        <a
+          href={(wger && exercise.source_url) || "https://wger.de"}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-accent underline"
+        >
+          wger.de
+        </a>
+        {wger && credit(exercise.author ?? null, exercise.license ?? null) ? ` · ${credit(exercise.author ?? null, exercise.license ?? null)}` : ""}
+      </p>
     </div>
   );
 }
