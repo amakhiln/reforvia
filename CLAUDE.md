@@ -7,6 +7,7 @@ Personal workout tracker (built from the owner's Excel plan), designed to become
 - `agent/` Python service (FastAPI + LangGraph) on Render. `coach/graph.py` is the chat Coach (read-only tools, streams SSE), `coach/analyst.py` is the weekly Analyst (no tools, numbers come from SQL). Agents call Supabase over REST with the user's own JWT so RLS applies. Only the weekly job uses the server-side secret key.
 - `supabase/migrations/` numbered SQL, applied in order in the Supabase SQL editor.
 - `scripts/generate_seed.py` rebuilds `0002_seed_default_program.sql` from the Excel plan.
+- `scripts/import_wger.py` builds migrations 0009+ (wger exercises) and uploads their media to Supabase Storage. Run locally only; it needs the secret key for the upload step.
 - `render.yaml` Render blueprint for the agent service.
 
 ## Commands
@@ -26,4 +27,4 @@ Personal workout tracker (built from the owner's Excel plan), designed to become
 Phases 1 to 4 done: logging, progress and PRs, Coach chat, weekly reviews with push. Not yet verified against real services: live Anthropic calls, real Supabase PostgREST queries, Docker build on Render, push delivery to phones.
 
 ## Next (Phase 5)
-Plan editor, offline logging (queue sets locally and sync), wger exercise library import (keep provenance columns: source, license, author, source_url).
+Offline logging (queue sets locally and sync). Done: plan editor, wger exercise library import (provenance columns kept: source, license, author, source_url; media in `exercise_media` and the `exercise-media` bucket).

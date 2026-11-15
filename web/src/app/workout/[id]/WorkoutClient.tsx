@@ -35,7 +35,7 @@ export function WorkoutClient() {
         sb.from("workouts").select("*").eq("id", id).single(),
         sb
           .from("workout_exercises")
-          .select("*, exercises(*), planned_exercises(*), set_logs(*)")
+          .select("*, exercises(*, exercise_media(*)), planned_exercises(*), set_logs(*)")
           .eq("workout_id", id)
           .order("sort_order"),
       ]);

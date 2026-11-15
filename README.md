@@ -13,6 +13,8 @@ Mobile-first workout tracker, Reforvia (Next.js PWA + Supabase). Phases 1–4: p
    - `supabase/migrations/0005_coach.sql` – coach chat history and the daily message cap
    - `supabase/migrations/0006_summaries.sql` – weekly reviews and push subscriptions
    - `supabase/migrations/0007_reset_plan.sql` – "Restore default plan" (keeps your logged history)
+   - `supabase/migrations/0008_exercise_media.sql` – exercise media table and the public `exercise-media` storage bucket
+   - `supabase/migrations/0009`–`0012_wger_exercises_*.sql` – the wger exercise library (973 exercises, CC BY-SA / CC0, author kept per row). Run after 0008. Optional.
 3. **Authentication → Providers → Email**: for quick testing you can turn off "Confirm email". Leave it on for real use and add your site URL under **Authentication → URL Configuration** (also add `http://localhost:3000/auth/callback`).
 4. **Project Settings → API**: copy the Project URL and the publishable (or anon) key.
    Never use the `service_role` / secret key in this app.
@@ -96,6 +98,20 @@ $$);
 - Weeks with no logged workouts get no review, so nobody is nagged.
 - On iPhone, notifications only work after you add the app to your Home Screen (iOS 16.4+); the toggle explains this when it can't be enabled.
 - Reviews are created once per user per week; running the job again never duplicates or re-bills.
+
+## Exercise library (wger)
+
+`scripts/import_wger.py` builds the library from [wger](https://wger.de) (English, openly licensed, attribution stored per row).
+
+```bash
+python3 -I scripts/import_wger.py dry-run   # counts, licences and media sizes; writes nothing
+python3 -I scripts/import_wger.py sql       # regenerates migrations 0009 to 0012
+python3 -I scripts/import_wger.py upload   # copies ~180 MB of images/videos into Storage; reads scripts/.env
+```
+
+`upload` reads `SUPABASE_URL` and `SUPABASE_SECRET_KEY` from the environment or from `scripts/.env` (two `KEY=value` lines; git-ignored, never commit it).
+
+Order: run migration `0008`, then `upload` (run it again to retry failures; files already there are skipped), then `0009` to `0012`. The secret key is used only for this local upload: never put it in the repo or the web app. Exercises that clash by name with your own library are skipped.
 
 ## Scripts (in `web/`)
 

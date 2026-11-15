@@ -17,7 +17,7 @@ type Item = {
   exercises: { name: string };
 };
 type Session = { id: string; name: string; day_of_week: number; is_optional: boolean; planned_exercises: Item[] };
-type Found = { id: string; name: string; main_muscles: string | null; is_timed: boolean };
+type Found = { id: string; name: string; main_muscles: string | null; is_timed: boolean; source: string };
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : ((e as { message?: string })?.message ?? "Something went wrong"));
 const saved = () => toast.success("Plan saved", { id: "plan-saved", duration: 1500 });
@@ -77,6 +77,13 @@ export default function PlanPage() {
           {sessions.map((s) => (
             <SessionCard key={s.id} session={s} onChanged={load} />
           ))}
+          <p className="tag pt-2 text-center text-muted">
+            Exercise library includes content from{" "}
+            <a href="https://wger.de" target="_blank" rel="noopener noreferrer" className="text-accent underline">
+              wger.de
+            </a>{" "}
+            (CC BY-SA)
+          </p>
         </div>
       )}
     </AppShell>
@@ -303,7 +310,7 @@ function Picker({ onPick, onCancel }: { onPick: (ex: Found) => Promise<void>; on
     if (term.length < 2) return setResults([]);
     const { data } = await getSupabase()
       .from("exercises")
-      .select("id,name,main_muscles,is_timed")
+      .select("id,name,main_muscles,is_timed,source")
       .ilike("name", `%${term}%`)
       .order("name")
       .limit(8);
@@ -346,7 +353,9 @@ function Picker({ onPick, onCancel }: { onPick: (ex: Found) => Promise<void>; on
             >
               <span className="min-w-0">
                 <span className="block truncate text-sm font-semibold uppercase tracking-wide">{r.name}</span>
-                {r.main_muscles && <span className="tag mt-0.5 block truncate text-muted">{r.main_muscles}</span>}
+                <span className="tag mt-0.5 block truncate text-muted">
+                  {[r.main_muscles, r.source === "wger" ? "wger" : null].filter(Boolean).join(" · ")}
+                </span>
               </span>
               {busy ? <InlineSpinner /> : <PlusIcon className="size-4 shrink-0 text-accent" />}
             </button>

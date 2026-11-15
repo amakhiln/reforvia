@@ -10,3 +10,4 @@ node_modules/
 .claude/
 web/.impeccable/
 .mcp.json
+scripts/.wger-cache.json

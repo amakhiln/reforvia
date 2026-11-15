@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { BookIcon, CheckIcon, ChevronIcon, ExternalIcon, PlusIcon } from "./icons";
+import { ExerciseMedia } from "./ExerciseMedia";
 import { SetRow, type SetValues } from "./SetRow";
 import { formatShortDate } from "@/lib/dates";
 import { formatKg, placeholderForSet, suggestNext } from "@/lib/progression";
@@ -187,6 +188,7 @@ export function ExerciseCard(props: Props) {
               <GuideRow label="How to" value={ex.form_instructions} />
               <GuideRow label="Avoid" value={ex.common_mistakes} />
               <GuideRow label="No equipment? Try" value={ex.alternatives} />
+              <ExerciseMedia exercise={ex} />
               {ex.video_url && (
                 <a
                   href={ex.video_url}

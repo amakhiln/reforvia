@@ -8,6 +8,21 @@ export type Exercise = {
   alternatives: string | null;
   video_url: string | null;
   is_timed: boolean;
+  source?: string;
+  license?: string | null;
+  author?: string | null;
+  source_url?: string | null;
+  exercise_media?: ExerciseMedia[];
+};
+
+export type ExerciseMedia = {
+  id: string;
+  kind: "image" | "video";
+  storage_path: string;
+  license: string | null;
+  author: string | null;
+  is_main: boolean;
+  sort_order: number;
 };
 
 export type PlannedExercise = {
