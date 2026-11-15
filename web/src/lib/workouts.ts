@@ -8,18 +8,16 @@ export async function startWorkout(sessionId: string, sessionName: string): Prom
   const userId = auth.session?.user.id;
   if (!userId) throw new Error("You’re signed out. Please sign in again.");
 
-  const { data: workout, error: wErr } = await sb
-    .from("workouts")
-    .insert({ user_id: userId, session_id: sessionId, session_name: sessionName, performed_on: localISO() })
-    .select("id")
-    .single();
+  // The two requests don't depend on each other, so send them together.
+  const [{ data: workout, error: wErr }, { data: planned, error: pErr }] = await Promise.all([
+    sb
+      .from("workouts")
+      .insert({ user_id: userId, session_id: sessionId, session_name: sessionName, performed_on: localISO() })
+      .select("id")
+      .single(),
+    sb.from("planned_exercises").select("id, exercise_id, sort_order").eq("session_id", sessionId).order("sort_order"),
+  ]);
   if (wErr || !workout) throw wErr ?? new Error("Could not start workout");
-
-  const { data: planned, error: pErr } = await sb
-    .from("planned_exercises")
-    .select("id, exercise_id, sort_order")
-    .eq("session_id", sessionId)
-    .order("sort_order");
   if (pErr) throw pErr;
 
   if (planned && planned.length > 0) {

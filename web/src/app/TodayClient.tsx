@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@yusufceng1z/ding-react";
 import { AppShell, ErrorNotice, InlineSpinner, SetupNotice, Spinner } from "@/components/AppShell";
@@ -19,7 +19,8 @@ export function TodayClient() {
   const [sessions, setSessions] = useState<ProgramSession[] | null>(null);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [starting, setStarting] = useState<string | null>(null);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
 
   const today = isoWeekday();
 
@@ -66,15 +67,16 @@ export function TodayClient() {
   }, [workouts]);
 
   async function open(session: ProgramSession) {
-    const existing = workoutFor.get(session.id);
-    if (existing) return router.push(`/workout/${existing.id}`);
-    setStarting(session.id);
+    if (pendingId !== null) return; // click events re-render synchronously, so a second tap sees this
+    setPendingId(session.id);
     try {
-      const id = await startWorkout(session.id, session.name);
-      router.push(`/workout/${id}`);
+      const existing = workoutFor.get(session.id);
+      const id = existing ? existing.id : await startWorkout(session.id, session.name);
+      // Stay "busy" until the next screen has rendered; this view unmounts when it does.
+      startTransition(() => router.push(`/workout/${id}`));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : ((e as { message?: string })?.message ?? "Could not start workout"));
-      setStarting(null);
+      setPendingId(null);
     }
   }
 
@@ -121,7 +123,8 @@ export function TodayClient() {
                   key={s.id}
                   session={s}
                   workout={workoutFor.get(s.id)}
-                  busy={starting === s.id}
+                  busy={pendingId === s.id}
+                  locked={pendingId !== null}
                   onOpen={() => open(s)}
                 />
               ))
@@ -138,7 +141,7 @@ export function TodayClient() {
                   <li key={s.id}>
                     <button
                       onClick={() => open(s)}
-                      disabled={starting === s.id}
+                      disabled={pendingId !== null}
                       className="flex w-full items-center gap-4 px-4 py-3.5 text-left active:bg-surface-2"
                     >
                       <span className="tag chip w-12 text-center text-muted">
@@ -159,7 +162,7 @@ export function TodayClient() {
                           {status}
                         </span>
                       )}
-                      <ChevronIcon className="-rotate-90 text-muted" />
+                      {pendingId === s.id ? <InlineSpinner className="text-muted" /> : <ChevronIcon className="-rotate-90 text-muted" />}
                     </button>
                   </li>
                 );
@@ -188,11 +191,13 @@ export function SessionHero({
   session,
   workout,
   busy,
+  locked,
   onOpen,
 }: {
   session: ProgramSession;
   workout?: Workout;
   busy: boolean;
+  locked: boolean;
   onOpen: () => void;
 }) {
   const done = Boolean(workout?.finished_at);
@@ -211,14 +216,14 @@ export function SessionHero({
       </div>
       <button
         onClick={onOpen}
-        disabled={busy}
+        disabled={locked}
         className={`tag mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border-2 text-sm disabled:opacity-60 ${
           done ? "border-line text-ink" : "border-accent-ink text-accent-ink"
         }`}
       >
         {busy ? (
           <>
-            <InlineSpinner /> Starting…
+            <InlineSpinner /> {workout ? "Opening…" : "Starting…"}
           </>
         ) : (
           label
