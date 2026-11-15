@@ -5,7 +5,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { AppShell, ErrorNotice, Spinner } from "@/components/AppShell";
 import { ChartCard, LineChart } from "@/components/charts";
-import { ChevronIcon } from "@/components/icons";
+import { ExerciseMedia } from "@/components/ExerciseMedia";
+import { BookIcon, ChevronIcon } from "@/components/icons";
 import { formatCompact } from "@/lib/chartMath";
 import { formatShortDate } from "@/lib/dates";
 import { formatKg } from "@/lib/progression";
@@ -35,7 +36,7 @@ export function ExerciseClient() {
     try {
       const sb = getSupabase();
       const [ex, h] = await Promise.all([
-        sb.from("exercises").select("*").eq("id", id).single(),
+        sb.from("exercises").select("*, exercise_media(*)").eq("id", id).single(),
         sb.rpc("exercise_history", { p_exercise_id: id }),
       ]);
       if (ex.error) throw ex.error;
@@ -104,6 +105,18 @@ export function ExerciseClient() {
     <AppShell title={exercise?.name ?? "Exercise"} subtitle="Progress" backHref="/progress">
       {error && <ErrorNotice message={error} onRetry={retry} />}
       {!error && !history && <Spinner />}
+
+      {exercise && (exercise.exercise_media?.length || exercise.source === "wger") && (
+        <details className="group mb-5 rounded-2xl bg-surface">
+          <summary className="tag flex list-none items-center gap-2 p-4">
+            <BookIcon className="size-4 text-accent" /> Demo
+            <ChevronIcon className="ml-auto size-4 text-muted transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="border-t border-line p-4">
+            <ExerciseMedia exercise={exercise} />
+          </div>
+        </details>
+      )}
 
       {history && history.length === 0 && (
         <div className="rounded-2xl border border-line bg-surface p-6 text-sm">
