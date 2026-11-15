@@ -20,8 +20,12 @@ export function TodayClient() {
   const [sessions, setSessions] = useState<ProgramSession[] | null>(null);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [pendingId, setPendingId] = useState<string | null>(null);
-  const [, startTransition] = useTransition();
+  // Next keeps this view alive when you open a workout, so "busy" must come from live state that ends by itself:
+  // `starting` while the workout is created, `navigating` until the next screen has rendered.
+  const [starting, setStarting] = useState<string | null>(null);
+  const [target, setTarget] = useState<string | null>(null);
+  const [navigating, startTransition] = useTransition();
+  const busyId = starting ?? (navigating ? target : null);
 
   const today = isoWeekday();
 
@@ -78,8 +82,9 @@ export function TodayClient() {
   }, [workouts]);
 
   async function open(session: ProgramSession) {
-    if (pendingId !== null) return; // click events re-render synchronously, so a second tap sees this
-    setPendingId(session.id);
+    if (busyId !== null) return; // click events re-render synchronously, so a second tap sees this
+    setTarget(session.id);
+    setStarting(session.id);
     try {
       const existing = workoutFor.get(session.id);
       let id: string;
@@ -89,11 +94,11 @@ export function TodayClient() {
         primeBundle(bundle); // the workout screen renders from this, with no second fetch
         id = bundle.workout.id;
       }
-      // Stay "busy" until the next screen has rendered; this view unmounts when it does.
       startTransition(() => router.push(`/workout/${id}`));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : ((e as { message?: string })?.message ?? "Could not start workout"));
-      setPendingId(null);
+    } finally {
+      setStarting(null);
     }
   }
 
@@ -140,8 +145,8 @@ export function TodayClient() {
                   key={s.id}
                   session={s}
                   workout={workoutFor.get(s.id)}
-                  busy={pendingId === s.id}
-                  locked={pendingId !== null}
+                  busy={busyId === s.id}
+                  locked={busyId !== null}
                   onOpen={() => open(s)}
                 />
               ))
@@ -163,7 +168,7 @@ export function TodayClient() {
                   <li key={s.id}>
                     <button
                       onClick={() => open(s)}
-                      disabled={pendingId !== null}
+                      disabled={busyId !== null}
                       className="flex w-full items-center gap-4 px-4 py-3.5 text-left active:bg-surface-2"
                     >
                       <span className="tag chip w-12 text-center text-muted">
@@ -184,7 +189,7 @@ export function TodayClient() {
                           {status}
                         </span>
                       )}
-                      {pendingId === s.id ? <InlineSpinner className="text-muted" /> : <ChevronIcon className="-rotate-90 text-muted" />}
+                      {busyId === s.id ? <InlineSpinner className="text-muted" /> : <ChevronIcon className="-rotate-90 text-muted" />}
                     </button>
                   </li>
                 );
