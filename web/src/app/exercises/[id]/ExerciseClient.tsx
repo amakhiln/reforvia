@@ -124,15 +124,29 @@ export function ExerciseClient() {
 
       {history && history.length > 0 && weighted && (
         <div className="space-y-5">
-          <div className="grid grid-cols-3 gap-3">
-            <Stat label="1RM (kg)" value={stats.bestE1rm != null ? formatKg(stats.bestE1rm) : "–"} note="best estimate" />
-            <Stat label="Heaviest (kg)" value={stats.heaviest != null ? formatKg(stats.heaviest) : "–"} note="single set" />
-            <Stat
-              label="Change (kg)"
-              value={stats.change == null ? "–" : `${stats.change >= 0 ? "+" : "−"}${formatKg(Math.abs(stats.change))}`}
-              note={`top set, ${stats.sessions} sessions`}
-            />
-          </div>
+          <section aria-label="Best lift" className="rounded-3xl bg-accent p-5 text-accent-ink">
+            <p className="tag opacity-75">Best estimated 1RM</p>
+            <p className="mt-3 font-mono text-6xl font-semibold leading-none tabular-nums tracking-tight">
+              {stats.bestE1rm != null ? formatKg(stats.bestE1rm) : "–"}
+              <span className="ml-1.5 text-2xl">kg</span>
+            </p>
+            <dl className="mt-5 grid grid-cols-3 gap-3 border-t-2 border-accent-ink/25 pt-4">
+              <div>
+                <dt className="tag opacity-75">Heaviest</dt>
+                <dd className="mt-1 font-mono text-2xl font-semibold tabular-nums">{stats.heaviest != null ? formatKg(stats.heaviest) : "–"}</dd>
+              </div>
+              <div>
+                <dt className="tag opacity-75">Top-set change</dt>
+                <dd className="mt-1 font-mono text-2xl font-semibold tabular-nums">
+                  {stats.change == null ? "–" : `${stats.change >= 0 ? "+" : "−"}${formatKg(Math.abs(stats.change))}`}
+                </dd>
+              </div>
+              <div>
+                <dt className="tag opacity-75">Sessions</dt>
+                <dd className="mt-1 font-mono text-2xl font-semibold tabular-nums">{stats.sessions}</dd>
+              </div>
+            </dl>
+          </section>
 
           <ChartCard
             title={activeMetric.label}
@@ -146,7 +160,7 @@ export function ExerciseClient() {
                     key={m.id}
                     onClick={() => setMetric(m.id)}
                     aria-pressed={metric === m.id}
-                    className={`h-9 flex-1 rounded-lg text-sm font-medium ${metric === m.id ? "bg-surface text-ink shadow-sm" : "text-muted"}`}
+                    className={`tag h-9 flex-1 rounded-lg ${metric === m.id ? "bg-surface text-ink shadow-sm" : "text-muted"}`}
                   >
                     {m.label}
                   </button>
@@ -167,16 +181,16 @@ export function ExerciseClient() {
           </ChartCard>
 
           <section aria-label="Sessions">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted">Sessions</h2>
-            <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface">
+            <h2 className="tag mb-3 text-muted">Sessions</h2>
+            <ul className="space-y-2">
               {[...history].reverse().map((r) => (
                 <li key={r.workout_id}>
-                  <Link href={`/workout/${r.workout_id}`} className="flex items-center gap-3 px-4 py-3.5 active:bg-surface-2">
+                  <Link href={`/workout/${r.workout_id}`} className="flex items-center gap-3 rounded-2xl bg-surface px-4 py-3.5 active:bg-surface-2">
                     <span className="min-w-0 flex-1">
-                      <span className="block font-medium">{formatShortDate(r.performed_on)}</span>
-                      <span className="block text-xs text-muted">{r.sets} sets · {formatCompact(Math.round(r.volume))} kg volume</span>
+                      <span className="block font-semibold uppercase tracking-wide">{formatShortDate(r.performed_on)}</span>
+                      <span className="tag mt-1 block text-muted">{r.sets} sets · {formatCompact(Math.round(r.volume))} kg volume</span>
                     </span>
-                    <span className="text-sm font-semibold tabular-nums">
+                    <span className="font-mono text-base font-semibold tabular-nums">
                       {r.top_load != null && r.top_load > 0 ? `${formatKg(r.top_load)} kg × ${r.top_reps}` : `${r.top_reps} reps`}
                     </span>
                     <ChevronIcon className="-rotate-90 text-muted" />
@@ -188,15 +202,5 @@ export function ExerciseClient() {
         </div>
       )}
     </AppShell>
-  );
-}
-
-function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
-  return (
-    <div className="rounded-2xl border border-line bg-surface p-3.5">
-      <p className="text-xs text-muted">{label}</p>
-      <p className="mt-1 text-lg font-semibold tabular-nums tracking-tight">{value}</p>
-      {note && <p className="mt-0.5 text-[11px] leading-tight text-muted">{note}</p>}
-    </div>
   );
 }

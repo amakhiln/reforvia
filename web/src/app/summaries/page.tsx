@@ -29,10 +29,10 @@ function Summary({ s, open }: { s: WeeklySummary; open?: boolean }) {
   const delta =
     st.prev_volume_kg && st.volume_kg !== undefined ? Math.round(((st.volume_kg - st.prev_volume_kg) / st.prev_volume_kg) * 100) : null;
   return (
-    <details open={open} className="group rounded-2xl border border-line bg-surface">
+    <details open={open} className="group rounded-2xl bg-surface">
       <summary className="flex cursor-pointer list-none items-start justify-between gap-3 p-4">
         <span className="min-w-0">
-          <span className="block text-xs font-medium uppercase tracking-wider text-muted">{weekRange(s.week_start)}</span>
+          <span className="tag block text-muted">{weekRange(s.week_start)}</span>
           <span className="mt-1 block font-semibold leading-snug">{headline}</span>
         </span>
         {!s.read_at && <span aria-label="New" className="mt-1.5 size-2.5 shrink-0 rounded-full bg-accent" />}
@@ -41,19 +41,19 @@ function Summary({ s, open }: { s: WeeklySummary; open?: boolean }) {
         {body && <RichText text={body} />}
         <dl className="grid grid-cols-3 gap-2 text-center">
           <div className="rounded-xl bg-surface-2 px-2 py-2.5">
-            <dd className="text-lg font-semibold tabular-nums">
+            <dd className="font-mono text-xl font-semibold tabular-nums">
               {st.sessions ?? 0}
               {st.planned_sessions ? <span className="text-sm font-normal text-muted">/{st.planned_sessions}</span> : null}
             </dd>
-            <dt className="text-xs text-muted">Sessions</dt>
+            <dt className="tag mt-1 text-muted">Sessions</dt>
           </div>
           <div className="rounded-xl bg-surface-2 px-2 py-2.5">
-            <dd className="text-lg font-semibold tabular-nums">{formatCompact(st.volume_kg ?? 0)}</dd>
-            <dt className="text-xs text-muted">Volume (kg)</dt>
+            <dd className="font-mono text-xl font-semibold tabular-nums">{formatCompact(st.volume_kg ?? 0)}</dd>
+            <dt className="tag mt-1 text-muted">Volume (kg)</dt>
           </div>
           <div className="rounded-xl bg-surface-2 px-2 py-2.5">
-            <dd className="text-lg font-semibold tabular-nums">{delta === null ? "–" : `${delta > 0 ? "+" : ""}${delta}%`}</dd>
-            <dt className="text-xs text-muted">vs prior week</dt>
+            <dd className="font-mono text-xl font-semibold tabular-nums">{delta === null ? "–" : `${delta > 0 ? "+" : ""}${delta}%`}</dd>
+            <dt className="tag mt-1 text-muted">vs prior week</dt>
           </div>
         </dl>
       </div>
@@ -133,14 +133,14 @@ export default function SummariesPage() {
       )}
 
       {push && push !== "unconfigured" && (
-        <div className="mb-5 flex items-center gap-3 rounded-2xl border border-line bg-surface p-4">
+        <div className="mb-5 flex items-center gap-3 rounded-2xl bg-surface p-4">
           <BellIcon className="shrink-0 text-muted" />
           <p className="min-w-0 flex-1 text-sm text-muted">{PUSH_COPY[push]}</p>
           {(push === "off" || push === "on") && (
             <button
               onClick={() => void togglePush()}
               disabled={busy}
-              className={`shrink-0 rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50 ${push === "off" ? "bg-accent text-accent-ink" : "bg-surface-2"}`}
+              className={`tag shrink-0 rounded-lg px-3 py-2 disabled:opacity-50 ${push === "off" ? "bg-accent text-accent-ink" : "bg-surface-2"}`}
             >
               {push === "off" ? "Turn on" : "Turn off"}
             </button>
@@ -160,7 +160,7 @@ export default function SummariesPage() {
             <button
               onClick={() => void generate()}
               disabled={busy}
-              className="mt-4 rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-accent-ink disabled:opacity-50"
+              className="tag mt-4 rounded-xl bg-accent px-4 py-3 text-accent-ink disabled:opacity-50"
             >
               {busy ? "Writing…" : "Create last week’s review"}
             </button>

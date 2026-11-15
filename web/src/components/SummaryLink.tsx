@@ -17,10 +17,10 @@ export function SummaryLink() {
   return (
     <Link
       href="/summaries"
-      className="mb-5 flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4 active:bg-surface-2"
+      className="mb-5 flex items-center justify-between gap-3 rounded-2xl bg-surface p-4 active:bg-surface-2"
     >
       <span className="min-w-0">
-        <span className="flex items-center gap-2 font-semibold">
+        <span className="flex items-center gap-2 font-semibold uppercase tracking-wide">
           Weekly review
           {unread && <span aria-label="New review" className="size-2.5 rounded-full bg-accent" />}
         </span>

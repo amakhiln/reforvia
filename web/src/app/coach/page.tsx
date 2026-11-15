@@ -132,15 +132,15 @@ export default function CoachPage() {
         messages && messages.length > 0 && !busy ? (
           confirmClear ? (
             <span className="flex items-center gap-1 text-sm">
-              <button onClick={clearChat} className="rounded-lg bg-danger px-2.5 py-1.5 font-medium text-white">
+              <button onClick={clearChat} className="tag rounded-lg bg-danger px-2.5 py-1.5 text-white">
                 Delete chat
               </button>
-              <button onClick={() => setConfirmClear(false)} className="rounded-lg px-2 py-1.5 text-muted">
+              <button onClick={() => setConfirmClear(false)} className="tag rounded-lg px-2 py-1.5 text-muted">
                 Cancel
               </button>
             </span>
           ) : (
-            <button onClick={() => setConfirmClear(true)} className="rounded-lg px-2 py-1.5 text-sm text-muted">
+            <button onClick={() => setConfirmClear(true)} className="tag rounded-lg px-2 py-1.5 text-muted">
               Clear
             </button>
           )
@@ -176,8 +176,8 @@ export default function CoachPage() {
 
       {empty && COACH_URL && (
         <div className="space-y-4">
-          <div className="rounded-2xl border border-line bg-surface p-5">
-            <p className="font-semibold">Your training coach</p>
+          <div className="rounded-2xl bg-surface p-5">
+            <p className="font-semibold uppercase tracking-wide">Your training coach</p>
             <p className="mt-1 text-sm text-muted">
               It reads your plan and logs to answer questions. It can’t change anything, and it isn’t a doctor.
             </p>
@@ -188,7 +188,7 @@ export default function CoachPage() {
                 key={s}
                 onClick={() => void send(s)}
                 disabled={busy}
-                className="rounded-full border border-line bg-surface px-3.5 py-2 text-left text-sm font-medium active:bg-surface-2"
+                className="rounded-xl bg-surface px-3.5 py-2.5 text-left text-sm font-medium active:bg-surface-2"
               >
                 {s}
               </button>
@@ -202,7 +202,7 @@ export default function CoachPage() {
           <div key={m.id} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
             <div
               className={`max-w-[88%] rounded-2xl px-4 py-3 text-[15px] ${
-                m.role === "user" ? "rounded-br-md bg-accent text-accent-ink" : "rounded-bl-md border border-line bg-surface"
+                m.role === "user" ? "rounded-br-md bg-accent text-accent-ink" : "rounded-bl-md bg-surface"
               }`}
             >
               {m.role === "user" ? (
@@ -258,7 +258,7 @@ export default function CoachPage() {
               type="submit"
               disabled={busy || !draft.trim()}
               aria-label="Send message"
-              className="flex size-12 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink disabled:opacity-40"
+              className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-ink disabled:opacity-40"
             >
               <SendIcon />
             </button>

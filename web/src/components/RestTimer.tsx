@@ -57,18 +57,18 @@ export function RestTimer({
         </div>
         <div className="flex items-center gap-3 px-4 py-3">
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium uppercase tracking-wider text-muted">{finished ? "Rest over" : "Rest"}</p>
-            <p className={`text-2xl font-semibold tabular-nums ${finished ? "text-accent" : ""}`}>
+            <p className="tag text-muted">{finished ? "Rest over" : "Rest"}</p>
+            <p className={`font-mono text-3xl font-semibold tabular-nums ${finished ? "text-accent" : ""}`}>
               {finished ? "Go!" : `${mm}:${ss}`}
             </p>
           </div>
-          <button onClick={() => onAdjust(-15)} className="h-10 rounded-lg bg-surface-2 px-3 text-sm font-medium" aria-label="Subtract 15 seconds">
+          <button onClick={() => onAdjust(-15)} className="h-10 rounded-lg bg-surface-2 px-3 font-mono text-sm font-medium" aria-label="Subtract 15 seconds">
             −15s
           </button>
-          <button onClick={() => onAdjust(15)} className="h-10 rounded-lg bg-surface-2 px-3 text-sm font-medium" aria-label="Add 15 seconds">
+          <button onClick={() => onAdjust(15)} className="h-10 rounded-lg bg-surface-2 px-3 font-mono text-sm font-medium" aria-label="Add 15 seconds">
             +15s
           </button>
-          <button onClick={onDismiss} className="h-10 rounded-lg bg-accent px-4 text-sm font-semibold text-accent-ink">
+          <button onClick={onDismiss} className="tag h-10 rounded-lg bg-accent px-4 text-accent-ink">
             Skip
           </button>
         </div>

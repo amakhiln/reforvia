@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell, ErrorNotice, SetupNotice, Spinner } from "@/components/AppShell";
 import { Dial } from "@/components/Dial";
+import { ResetWeek } from "@/components/ResetWeek";
 import { ChevronIcon } from "@/components/icons";
 import { DAY_NAMES, formatLongDate, isoWeekday, localISO, startOfWeekISO } from "@/lib/dates";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -168,6 +169,8 @@ export function TodayClient() {
               </li>
             </ul>
           </section>
+
+          <ResetWeek onDone={() => void load()} />
 
           <p className="text-center text-xs text-muted">
             Want to see past sessions? <Link href="/history" className="text-accent underline">Open history</Link>

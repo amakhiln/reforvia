@@ -62,18 +62,18 @@ export default function HistoryPage() {
               <li key={w.id}>
                 <Link
                   href={`/workout/${w.id}`}
-                  className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 active:bg-surface-2"
+                  className="flex items-center gap-3 rounded-2xl bg-surface p-4 active:bg-surface-2"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold">{w.session_name}</p>
-                    <p className="mt-0.5 text-xs text-muted">{formatLongDate(w.performed_on)}</p>
-                    <p className="mt-2 text-xs text-muted">
+                    <p className="truncate font-semibold uppercase tracking-wide">{w.session_name}</p>
+                    <p className="tag mt-1 text-muted">{formatLongDate(w.performed_on)}</p>
+                    <p className="tag mt-2 text-muted">
                       {done}/{w.workout_exercises.length} exercises · {sets.length} sets
                       {volume > 0 ? ` · ${formatKg(Math.round(volume))} kg volume` : ""}
                     </p>
                   </div>
                   <span
-                    className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                    className={`tag rounded-md px-2 py-1 ${
                       w.finished_at ? "bg-accent-soft text-accent" : "bg-surface-2 text-muted"
                     }`}
                   >

@@ -12,6 +12,7 @@ Mobile-first workout tracker, Reforvia (Next.js PWA + Supabase). Phases 1–4: p
    - `supabase/migrations/0004_progress.sql` – weekly volume, per-exercise history, personal bests
    - `supabase/migrations/0005_coach.sql` – coach chat history and the daily message cap
    - `supabase/migrations/0006_summaries.sql` – weekly reviews and push subscriptions
+   - `supabase/migrations/0007_reset_plan.sql` – "Restore default plan" (keeps your logged history)
 3. **Authentication → Providers → Email**: for quick testing you can turn off "Confirm email". Leave it on for real use and add your site URL under **Authentication → URL Configuration** (also add `http://localhost:3000/auth/callback`).
 4. **Project Settings → API**: copy the Project URL and the publishable (or anon) key.
    Never use the `service_role` / secret key in this app.
