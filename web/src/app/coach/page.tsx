@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AppShell, ErrorNotice } from "@/components/AppShell";
+import { AppShell, ErrorNotice, InlineSpinner } from "@/components/AppShell";
 import { SendIcon } from "@/components/icons";
 import { RichText } from "@/components/RichText";
 import { COACH_URL, CoachHttpError, pingCoach, streamCoach } from "@/lib/coach";
@@ -260,7 +260,7 @@ export default function CoachPage() {
               aria-label="Send message"
               className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-ink disabled:opacity-40"
             >
-              <SendIcon />
+              {busy ? <InlineSpinner /> : <SendIcon />}
             </button>
           </div>
         </form>

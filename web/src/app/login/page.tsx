@@ -4,7 +4,8 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabase } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { SetupNotice } from "@/components/AppShell";
+import { toast } from "@yusufceng1z/ding-react";
+import { InlineSpinner, SetupNotice } from "@/components/AppShell";
 import { LogoMark } from "@/components/Logo";
 
 function LoginForm() {
@@ -43,6 +44,7 @@ function LoginForm() {
           router.refresh();
         } else {
           setInfo("Check your email to confirm your account, then sign in.");
+          toast.info("Check your email to confirm your account");
           setMode("signin");
         }
       }
@@ -94,9 +96,17 @@ function LoginForm() {
         <button
           type="submit"
           disabled={busy || !isSupabaseConfigured}
-          className="h-12 w-full rounded-xl bg-accent text-base font-semibold text-accent-ink disabled:opacity-50"
+          className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-accent text-base font-semibold text-accent-ink disabled:opacity-50"
         >
-          {busy ? "Please wait…" : mode === "signin" ? "Sign in" : "Create account"}
+          {busy ? (
+            <>
+              <InlineSpinner /> Please wait…
+            </>
+          ) : mode === "signin" ? (
+            "Sign in"
+          ) : (
+            "Create account"
+          )}
         </button>
       </form>
 

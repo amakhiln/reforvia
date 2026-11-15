@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AppShell, ErrorNotice, Spinner } from "@/components/AppShell";
+import { toast } from "@yusufceng1z/ding-react";
+import { AppShell, ErrorNotice, InlineSpinner, Spinner } from "@/components/AppShell";
 import { RichText } from "@/components/RichText";
 import { BellIcon } from "@/components/icons";
 import { COACH_URL, CoachHttpError, generateSummary } from "@/lib/coach";
@@ -74,7 +75,6 @@ export default function SummariesPage() {
   const [error, setError] = useState<string | null>(null);
   const [push, setPush] = useState<PushState | null>(null);
   const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const sb = getSupabase();
@@ -99,11 +99,13 @@ export default function SummariesPage() {
 
   async function togglePush() {
     setBusy(true);
-    setError(null);
     try {
-      setPush(push === "on" ? await disablePush() : await enablePush());
+      const next = push === "on" ? await disablePush() : await enablePush();
+      setPush(next);
+      if (next === "on") toast.success("Notifications on");
+      else if (next === "off") toast.info("Notifications off");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn’t change notifications.");
+      toast.error(e instanceof Error ? e.message : "Couldn’t change notifications.");
     } finally {
       setBusy(false);
     }
@@ -111,14 +113,15 @@ export default function SummariesPage() {
 
   async function generate() {
     setBusy(true);
-    setError(null);
-    setNote(null);
     try {
       const status = await generateSummary();
-      if (status === "idle") setNote("There were no logged workouts last week, so there’s nothing to review yet.");
-      else await load();
+      if (status === "idle") toast.info("No logged workouts last week, so there’s nothing to review yet.");
+      else {
+        await load();
+        toast.success("Review ready");
+      }
     } catch (e) {
-      setError(e instanceof CoachHttpError || e instanceof Error ? e.message : "Couldn’t create the summary.");
+      toast.error(e instanceof CoachHttpError || e instanceof Error ? e.message : "Couldn’t create the summary.");
     } finally {
       setBusy(false);
     }
@@ -140,9 +143,9 @@ export default function SummariesPage() {
             <button
               onClick={() => void togglePush()}
               disabled={busy}
-              className={`tag shrink-0 rounded-lg px-3 py-2 disabled:opacity-50 ${push === "off" ? "bg-accent text-accent-ink" : "bg-surface-2"}`}
+              className={`tag inline-flex min-w-20 shrink-0 items-center justify-center rounded-lg px-3 py-2 disabled:opacity-50 ${push === "off" ? "bg-accent text-accent-ink" : "bg-surface-2"}`}
             >
-              {push === "off" ? "Turn on" : "Turn off"}
+              {busy ? <InlineSpinner /> : push === "off" ? "Turn on" : "Turn off"}
             </button>
           )}
         </div>
@@ -160,12 +163,17 @@ export default function SummariesPage() {
             <button
               onClick={() => void generate()}
               disabled={busy}
-              className="tag mt-4 rounded-xl bg-accent px-4 py-3 text-accent-ink disabled:opacity-50"
+              className="tag mt-4 inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-3 text-accent-ink disabled:opacity-50"
             >
-              {busy ? "Writing…" : "Create last week’s review"}
+              {busy ? (
+                <>
+                  <InlineSpinner /> Writing…
+                </>
+              ) : (
+                "Create last week’s review"
+              )}
             </button>
           )}
-          {note && <p role="status" className="mt-3 text-muted">{note}</p>}
         </div>
       )}
 

@@ -94,3 +94,27 @@ input[type="number"] {
   border-radius: 0.5rem;
   padding: 0.25rem 0.5rem;
 }
+
+/* Anything clickable shows a pointer; disabled controls say so. */
+button,
+a[href],
+summary,
+select,
+[role="button"],
+input[type="submit"],
+label:has(input[type="checkbox"], input[type="radio"]) {
+  cursor: pointer;
+}
+button:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+/* Ding toasts follow the app tokens. */
+.tst-viewport {
+  --tst-radius: 16px;
+  --tst-bg: var(--surface-2);
+  --tst-fg: var(--text);
+  --tst-warning: var(--accent);
+  --tst-shadow: 0 10px 30px rgb(0 0 0 / 0.35);
+}

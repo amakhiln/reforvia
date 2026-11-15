@@ -87,11 +87,18 @@ export function SetupNotice() {
   );
 }
 
+export function InlineSpinner({ className = "" }: { className?: string }) {
+  return <span aria-hidden className={`inline-block size-4 animate-spin rounded-full border-2 border-current border-t-transparent ${className}`} />;
+}
+
+/** Page loader: skeleton blocks shaped like the content that is about to appear. */
 export function Spinner({ label = "Loading" }: { label?: string }) {
   return (
-    <div role="status" className="flex items-center justify-center gap-3 py-16 text-sm text-muted">
-      <span className="size-4 animate-spin rounded-full border-2 border-line border-t-accent" />
-      {label}
+    <div role="status" className="space-y-3">
+      <div className="h-44 rounded-3xl bg-surface motion-safe:animate-pulse" />
+      <div className="h-16 rounded-2xl bg-surface motion-safe:animate-pulse" />
+      <div className="h-16 rounded-2xl bg-surface motion-safe:animate-pulse" />
+      <span className="sr-only">{label}</span>
     </div>
   );
 }

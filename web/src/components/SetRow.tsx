@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { InlineSpinner } from "./AppShell";
 import { CheckIcon } from "./icons";
 import type { SetLog } from "@/lib/types";
 
@@ -142,7 +143,7 @@ export function SetRow({ setNumber, log, timed, timedUnit, placeholder, onLog, o
           logged ? "bg-accent text-accent-ink pop" : "bg-surface-2 text-muted"
         }`}
       >
-        <CheckIcon />
+        {busy ? <InlineSpinner /> : <CheckIcon />}
       </button>
     </div>
   );

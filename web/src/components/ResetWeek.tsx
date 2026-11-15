@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "@yusufceng1z/ding-react";
+import { InlineSpinner } from "@/components/AppShell";
 import { startOfWeekISO } from "@/lib/dates";
 import { getSupabase } from "@/lib/supabase/client";
 
@@ -23,11 +25,9 @@ const COPY: Record<Kind, { button: string; warn: string; confirm: string }> = {
 export function ResetWeek({ onDone }: { onDone: () => void }) {
   const [pending, setPending] = useState<Kind | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   async function run(kind: Kind) {
     setBusy(true);
-    setError(null);
     try {
       const sb = getSupabase();
       const { error } =
@@ -36,9 +36,10 @@ export function ResetWeek({ onDone }: { onDone: () => void }) {
           : await sb.rpc("reset_my_program");
       if (error) throw error;
       setPending(null);
+      toast.success(kind === "logs" ? "This week’s logs cleared" : "Default plan restored");
       onDone();
     } catch (e) {
-      setError(e instanceof Error ? e.message : ((e as { message?: string })?.message ?? "Reset failed"));
+      toast.error(e instanceof Error ? e.message : ((e as { message?: string })?.message ?? "Reset failed"));
     } finally {
       setBusy(false);
     }
@@ -54,9 +55,15 @@ export function ResetWeek({ onDone }: { onDone: () => void }) {
             <button
               onClick={() => void run(pending)}
               disabled={busy}
-              className={`tag h-11 flex-1 rounded-xl text-white disabled:opacity-50 ${pending === "logs" ? "bg-danger" : "bg-accent text-accent-ink"}`}
+              className={`tag inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl text-white disabled:opacity-50 ${pending === "logs" ? "bg-danger" : "bg-accent text-accent-ink"}`}
             >
-              {busy ? "Working…" : COPY[pending].confirm}
+              {busy ? (
+                <>
+                  <InlineSpinner /> Working…
+                </>
+              ) : (
+                COPY[pending].confirm
+              )}
             </button>
             <button onClick={() => setPending(null)} disabled={busy} className="tag h-11 rounded-xl border-2 border-line px-4">
               Cancel
@@ -72,7 +79,6 @@ export function ResetWeek({ onDone }: { onDone: () => void }) {
           ))}
         </div>
       )}
-      {error && <p role="alert" className="text-sm text-danger">{error}</p>}
     </section>
   );
 }

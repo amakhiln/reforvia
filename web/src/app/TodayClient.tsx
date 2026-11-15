@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AppShell, ErrorNotice, SetupNotice, Spinner } from "@/components/AppShell";
+import { toast } from "@yusufceng1z/ding-react";
+import { AppShell, ErrorNotice, InlineSpinner, SetupNotice, Spinner } from "@/components/AppShell";
 import { Dial } from "@/components/Dial";
 import { ResetWeek } from "@/components/ResetWeek";
 import { ChevronIcon } from "@/components/icons";
@@ -72,7 +73,7 @@ export function TodayClient() {
       const id = await startWorkout(session.id, session.name);
       router.push(`/workout/${id}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : (e as { message?: string })?.message ?? "Could not start workout");
+      toast.error(e instanceof Error ? e.message : ((e as { message?: string })?.message ?? "Could not start workout"));
       setStarting(null);
     }
   }
@@ -211,11 +212,17 @@ export function SessionHero({
       <button
         onClick={onOpen}
         disabled={busy}
-        className={`tag mt-6 h-12 w-full rounded-xl border-2 text-sm disabled:opacity-60 ${
+        className={`tag mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border-2 text-sm disabled:opacity-60 ${
           done ? "border-line text-ink" : "border-accent-ink text-accent-ink"
         }`}
       >
-        {busy ? "Starting…" : label}
+        {busy ? (
+          <>
+            <InlineSpinner /> Starting…
+          </>
+        ) : (
+          label
+        )}
       </button>
     </div>
   );

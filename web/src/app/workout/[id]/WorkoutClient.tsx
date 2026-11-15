@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { toast } from "@yusufceng1z/ding-react";
 import { AppShell, ErrorNotice, Spinner } from "@/components/AppShell";
 import { ExerciseCard } from "@/components/ExerciseCard";
 import { RestTimer } from "@/components/RestTimer";
@@ -21,7 +22,6 @@ export function WorkoutClient() {
   const [previous, setPrevious] = useState<Record<string, PreviousSet[]>>({});
   const [openId, setOpenId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
   const [rest, setRest] = useState<{ endsAt: number; total: number } | null>(null);
   const userId = useRef<string | null>(null);
 
@@ -93,9 +93,8 @@ export function WorkoutClient() {
     };
   }, []);
 
-  const flash = useCallback((text: string) => {
-    setToast(text);
-    setTimeout(() => setToast(null), 3500);
+  const flash = useCallback((text: string, kind: "error" | "success" = "error") => {
+    toast[kind](text);
   }, []);
 
   const patchItem = useCallback((itemId: string, fn: (it: WorkoutExercise) => WorkoutExercise) => {
@@ -151,7 +150,7 @@ export function WorkoutClient() {
       setRest({ endsAt: Date.now() + secs * 1000, total: secs });
       const done = await syncCompleted(item, logs);
       if (done) {
-        flash(`${item.exercises.name} complete`);
+        flash(`${item.exercises.name} complete`, "success");
         advanceFrom(item.id);
       }
     } catch (e) {
@@ -214,7 +213,10 @@ export function WorkoutClient() {
       .update({ finished_at: finished ? new Date().toISOString() : null })
       .eq("id", id);
     if (error) return flash(`Couldn’t update workout: ${msg(error)}`);
-    if (finished) router.push("/");
+    if (finished) {
+      toast.success("Workout finished");
+      router.push("/");
+    }
     else setWorkout((w) => (w ? { ...w, finished_at: null } : w));
   }
 
@@ -278,15 +280,6 @@ export function WorkoutClient() {
           >
             {workout.finished_at ? "Reopen workout" : "Finish workout"}
           </button>
-        </div>
-      )}
-
-      {toast && (
-        <div
-          role="status"
-          className="fixed inset-x-4 top-[max(env(safe-area-inset-top),1rem)] z-40 mx-auto max-w-xl rounded-xl bg-ink px-4 py-3 text-sm font-medium text-bg shadow-lg"
-        >
-          {toast}
         </div>
       )}
 
