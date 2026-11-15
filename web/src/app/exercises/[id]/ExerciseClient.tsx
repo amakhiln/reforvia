@@ -1,0 +1,202 @@
+"use client";
+
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
+import { AppShell, ErrorNotice, Spinner } from "@/components/AppShell";
+import { ChartCard, LineChart } from "@/components/charts";
+import { ChevronIcon } from "@/components/icons";
+import { formatCompact } from "@/lib/chartMath";
+import { formatShortDate } from "@/lib/dates";
+import { formatKg } from "@/lib/progression";
+import { getSupabase } from "@/lib/supabase/client";
+import type { Exercise, ExerciseHistoryRow } from "@/lib/types";
+
+type Metric = "top" | "e1rm" | "volume";
+const METRICS: { id: Metric; label: string; unit: string; blurb: string }[] = [
+  { id: "top", label: "Top set", unit: "kg", blurb: "Heaviest load each session" },
+  { id: "e1rm", label: "Est. 1RM", unit: "kg", blurb: "Estimated one-rep max (Epley), sets of 1–12 reps" },
+  { id: "volume", label: "Volume", unit: "kg", blurb: "Load × reps per session" },
+];
+
+const toMs = (iso: string) => {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d).getTime();
+};
+
+export function ExerciseClient() {
+  const { id } = useParams<{ id: string }>();
+  const [exercise, setExercise] = useState<Exercise | null>(null);
+  const [history, setHistory] = useState<ExerciseHistoryRow[] | null>(null);
+  const [metric, setMetric] = useState<Metric>("top");
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const sb = getSupabase();
+      const [ex, h] = await Promise.all([
+        sb.from("exercises").select("*").eq("id", id).single(),
+        sb.rpc("exercise_history", { p_exercise_id: id }),
+      ]);
+      if (ex.error) throw ex.error;
+      if (h.error) throw h.error;
+      setExercise(ex.data as Exercise);
+      setHistory(
+        ((h.data ?? []) as ExerciseHistoryRow[]).map((r) => ({
+          ...r,
+          top_load: r.top_load == null ? null : Number(r.top_load),
+          best_e1rm: r.best_e1rm == null ? null : Number(r.best_e1rm),
+          volume: Number(r.volume),
+        })),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : ((e as { message?: string })?.message ?? "Failed to load"));
+    }
+  }, [id]);
+
+  const retry = useCallback(() => {
+    setError(null);
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    // Fetch on mount; state is only set after the awaited requests resolve.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+  }, [load]);
+
+  const series = useMemo(() => {
+    const rows = history ?? [];
+    return rows
+      .map((r) => {
+        const y = metric === "top" ? r.top_load : metric === "e1rm" ? r.best_e1rm : r.volume;
+        return y == null || y <= 0
+          ? null
+          : {
+              x: toMs(r.performed_on),
+              date: r.performed_on,
+              y,
+              sets: r.sets,
+              detail: `${r.sets} sets · top ${formatKg(r.top_load ?? 0)} kg × ${r.top_reps ?? 0}`,
+            };
+      })
+      .filter((p): p is NonNullable<typeof p> => p !== null);
+  }, [history, metric]);
+
+  const stats = useMemo(() => {
+    const rows = history ?? [];
+    const e1rms = rows.map((r) => r.best_e1rm).filter((v): v is number => v != null);
+    const loads = rows.map((r) => r.top_load).filter((v): v is number => v != null && v > 0);
+    const first = loads[0];
+    const lastLoad = loads[loads.length - 1];
+    return {
+      sessions: rows.length,
+      bestE1rm: e1rms.length ? Math.max(...e1rms) : null,
+      heaviest: loads.length ? Math.max(...loads) : null,
+      change: first != null && lastLoad != null && loads.length > 1 ? lastLoad - first : null,
+    };
+  }, [history]);
+
+  const activeMetric = METRICS.find((m) => m.id === metric)!;
+  const weighted = (history ?? []).some((r) => (r.top_load ?? 0) > 0);
+
+  return (
+    <AppShell title={exercise?.name ?? "Exercise"} subtitle="Progress" backHref="/progress">
+      {error && <ErrorNotice message={error} onRetry={retry} />}
+      {!error && !history && <Spinner />}
+
+      {history && history.length === 0 && (
+        <div className="rounded-2xl border border-line bg-surface p-6 text-sm">
+          <p className="font-semibold">No sets logged yet</p>
+          <p className="mt-1 text-muted">
+            Log this exercise in a workout and its trend will show up here. Timed exercises such as planks and cardio
+            aren’t charted yet.
+          </p>
+        </div>
+      )}
+
+      {history && history.length > 0 && !weighted && (
+        <div className="rounded-2xl border border-line bg-surface p-6 text-sm">
+          <p className="font-semibold">Bodyweight exercise</p>
+          <p className="mt-1 text-muted">Add a load to your sets to see strength trends. {stats.sessions} sessions logged so far.</p>
+        </div>
+      )}
+
+      {history && history.length > 0 && weighted && (
+        <div className="space-y-5">
+          <div className="grid grid-cols-3 gap-3">
+            <Stat label="1RM (kg)" value={stats.bestE1rm != null ? formatKg(stats.bestE1rm) : "–"} note="best estimate" />
+            <Stat label="Heaviest (kg)" value={stats.heaviest != null ? formatKg(stats.heaviest) : "–"} note="single set" />
+            <Stat
+              label="Change (kg)"
+              value={stats.change == null ? "–" : `${stats.change >= 0 ? "+" : "−"}${formatKg(Math.abs(stats.change))}`}
+              note={`top set, ${stats.sessions} sessions`}
+            />
+          </div>
+
+          <ChartCard
+            title={activeMetric.label}
+            subtitle={activeMetric.blurb}
+            columns={["Date", activeMetric.label + " (kg)", "Sets"]}
+            rows={[...series].reverse().map((p) => [formatShortDate(p.date), formatCompact(p.y), String(p.sets)])}
+            controls={
+              <div role="group" aria-label="Chart metric" className="flex rounded-xl bg-surface-2 p-1">
+                {METRICS.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => setMetric(m.id)}
+                    aria-pressed={metric === m.id}
+                    className={`h-9 flex-1 rounded-lg text-sm font-medium ${metric === m.id ? "bg-surface text-ink shadow-sm" : "text-muted"}`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            }
+          >
+            {series.length > 0 ? (
+              <LineChart
+                points={series}
+                format={(n) => formatCompact(Math.round(n * 10) / 10)}
+                unit={activeMetric.unit}
+                ariaLabel={`${activeMetric.label} for ${exercise?.name ?? "this exercise"} across ${series.length} sessions. Latest: ${formatCompact(series[series.length - 1].y)} kilograms.`}
+              />
+            ) : (
+              <p className="py-8 text-center text-sm text-muted">No data for this metric yet.</p>
+            )}
+          </ChartCard>
+
+          <section aria-label="Sessions">
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted">Sessions</h2>
+            <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface">
+              {[...history].reverse().map((r) => (
+                <li key={r.workout_id}>
+                  <Link href={`/workout/${r.workout_id}`} className="flex items-center gap-3 px-4 py-3.5 active:bg-surface-2">
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-medium">{formatShortDate(r.performed_on)}</span>
+                      <span className="block text-xs text-muted">{r.sets} sets · {formatCompact(Math.round(r.volume))} kg volume</span>
+                    </span>
+                    <span className="text-sm font-semibold tabular-nums">
+                      {r.top_load != null && r.top_load > 0 ? `${formatKg(r.top_load)} kg × ${r.top_reps}` : `${r.top_reps} reps`}
+                    </span>
+                    <ChevronIcon className="-rotate-90 text-muted" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
+      )}
+    </AppShell>
+  );
+}
+
+function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
+  return (
+    <div className="rounded-2xl border border-line bg-surface p-3.5">
+      <p className="text-xs text-muted">{label}</p>
+      <p className="mt-1 text-lg font-semibold tabular-nums tracking-tight">{value}</p>
+      {note && <p className="mt-0.5 text-[11px] leading-tight text-muted">{note}</p>}
+    </div>
+  );
+}

@@ -1,0 +1,34 @@
+# Render Blueprint: deploys the coach service from this repository.
+services:
+  - type: web
+    name: workout-coach
+    runtime: docker
+    plan: free
+    dockerfilePath: ./agent/Dockerfile
+    dockerContext: ./agent
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: SUPABASE_URL
+        sync: false          # prompted in the dashboard
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      # Weekly reviews (Phase 4)
+      - key: SUPABASE_SECRET_KEY   # server-only; never put this in the web app
+        sync: false
+      - key: CRON_SECRET           # any long random string; the scheduler sends it in x-cron-secret
+        sync: false
+      - key: VAPID_PRIVATE_KEY     # from `npx web-push generate-vapid-keys`
+        sync: false
+      - key: VAPID_SUBJECT         # e.g. mailto:you@example.com
+        sync: false
+      - key: ANALYST_TZ
+        value: Asia/Kolkata
+      - key: COACH_MODEL
+        value: claude-sonnet-5-5
+      - key: DAILY_MESSAGE_LIMIT
+        value: "30"
