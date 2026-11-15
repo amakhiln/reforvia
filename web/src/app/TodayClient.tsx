@@ -132,7 +132,12 @@ export function TodayClient() {
           </section>
 
           <section aria-label="This week">
-            <h2 className="tag mb-3 text-muted">This week</h2>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="tag text-muted">This week</h2>
+              <Link href="/plan" className="tag text-accent">
+                Edit plan
+              </Link>
+            </div>
             <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface">
               {sessions.map((s) => {
                 const w = workoutFor.get(s.id);

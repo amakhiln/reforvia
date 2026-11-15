@@ -44,3 +44,6 @@ export const SendIcon = ({ className }: P) => (
 export const BellIcon = ({ className }: P) => (
   <svg {...base} className={className}><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10.3 21a1.9 1.9 0 0 0 3.4 0" /></svg>
 );
+export const CloseIcon = ({ className }: P) => (
+  <svg {...base} className={className}><path d="M6 6l12 12M18 6L6 18" /></svg>
+);
