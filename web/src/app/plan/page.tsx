@@ -16,7 +16,7 @@ type Item = {
   planned_sets: number;
   rep_target: string;
   is_timed: boolean;
-  exercises: { name: string };
+  exercises: { name: string; main_muscles: string | null; equipment: string | null };
 };
 type Session = { id: string; name: string; day_of_week: number; is_optional: boolean; planned_exercises: Item[] };
 
@@ -35,7 +35,7 @@ export default function PlanPage() {
       const { data, error: sErr } = await sb
         .from("program_sessions")
         .select(
-          "id,name,day_of_week,is_optional,sort_order,planned_exercises(id,exercise_id,sort_order,planned_sets,rep_target,is_timed,exercises(name))",
+          "id,name,day_of_week,is_optional,sort_order,planned_exercises(id,exercise_id,sort_order,planned_sets,rep_target,is_timed,exercises(name,main_muscles,equipment))",
         )
         .not("user_id", "is", null)
         .order("day_of_week")
@@ -167,6 +167,7 @@ function SessionCard({ session, onChanged }: { session: Session; onChanged: () =
             last={i === items.length - 1}
             onMove={(d) => move(i, d)}
             onSave={(patch) => run(() => getSupabase().from("planned_exercises").update(patch).eq("id", it.id))}
+            takenIds={items.map((i) => i.exercise_id)}
             onReplace={(ex) =>
               ex.id === it.exercise_id
                 ? Promise.resolve(toast.info("That’s already the exercise in this slot.")).then(() => false)
@@ -196,6 +197,7 @@ function Row({
   onMove,
   onSave,
   onReplace,
+  takenIds,
   onRemove,
 }: {
   item: Item;
@@ -204,6 +206,7 @@ function Row({
   onMove: (dir: -1 | 1) => Promise<void>;
   onSave: (patch: Record<string, unknown>) => Promise<boolean>;
   onReplace: (ex: Found) => Promise<boolean>;
+  takenIds: string[];
   onRemove: () => Promise<boolean>;
 }) {
   const [sets, setSets] = useState(String(item.planned_sets));
@@ -313,6 +316,8 @@ function Row({
       {replacing && (
         <div className="mt-2">
           <Picker
+            suggestFor={{ id: item.exercise_id, name: item.exercises.name, main_muscles: item.exercises.main_muscles, equipment: item.exercises.equipment, is_timed: item.is_timed }}
+            exclude={takenIds}
             onPick={async (ex) => {
               if (await onReplace(ex)) setReplacing(false);
             }}
