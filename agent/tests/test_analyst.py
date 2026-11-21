@@ -76,12 +76,12 @@ async def test_weekly_run_writes_summary_and_pushes():
     assert r.status_code == 202
     assert r.json()["created"] == 1 and r.json()["failed"] == 0
     (table, row), = [i for i in fake.inserted if i[0] == "weekly_summaries"]
-    assert row["user_id"] == "user-1" and row["content"] == SUMMARY and row["stats"] == STATS
+    assert row["user_id"] == "user-1" and row["content"] == SUMMARY and row["stats"] == {**STATS, "targets": []}
     assert row["week_start"] == last_completed_week("Asia/Kolkata").isoformat()
     assert sent and sent[0][1]["body"] == "Three sessions, volume up 25%" and sent[0][1]["url"] == "/summaries"
     # the model was given exactly the numbers from the database
     prompt = fake.model.seen[0]
-    assert json.dumps(STATS) in prompt[-1].content and "Never invent" in prompt[0].content
+    assert json.dumps({**STATS, "targets": []}, ensure_ascii=False) in prompt[-1].content and "Never invent" in prompt[0].content
 
 
 async def test_idle_users_are_skipped_without_calling_the_model():

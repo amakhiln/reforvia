@@ -119,5 +119,17 @@ export type WeeklySummary = {
     volume_kg?: number;
     prev_volume_kg?: number;
     sets?: number;
+    // added by migration 0015; older reviews do not have these and show the simpler layout
+    trained_days?: number[]; // ISO weekdays, 1 = Monday
+    plan_days?: number[];
+    lifts?: {
+      exercise: string;
+      top_load_kg: number | null;
+      best_e1rm_kg: number | null;
+      prior_best_e1rm_kg: number | null;
+      last_week_top_load_kg: number | null;
+      new_best: boolean;
+    }[];
+    targets?: { exercise: string; kind: "increase" | "hold"; next_load_kg: number; target_reps: number; plan: string }[];
   };
 };
