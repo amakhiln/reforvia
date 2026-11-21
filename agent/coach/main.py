@@ -170,6 +170,7 @@ def create_app(
             announced: set[str] = set()
             t_model = time.perf_counter()
             first_token: float | None = None
+            finish: str | None = None
             last_step: int | None = None
             tokens_in = tokens_out = 0
             try:
@@ -192,6 +193,9 @@ def create_app(
                             first_token = time.perf_counter() - t_model
                         buf.append(text)
                         yield _sse({"type": "token", "text": text})
+                    reason = (getattr(chunk, "response_metadata", None) or {}).get("finish_reason")
+                    if reason:
+                        finish = reason
                     usage = getattr(chunk, "usage_metadata", None)
                     if usage:
                         tokens_in += int(usage.get("input_tokens", 0) or 0)
@@ -204,7 +208,15 @@ def create_app(
                 yield _sse({"type": "error", "message": "The coach hit a problem. Please try again."})
                 return
 
-            answer = "".join(buf).strip() or "I couldn't put an answer together. Please try again."
+            answer = "".join(buf).strip()
+            if not answer:
+                # Say what happened instead of saving a vague reply into the history.
+                log.warning(
+                    "empty reply: model=%s finish_reason=%s tools=%d tokens in/out %d/%d",
+                    settings.model, finish, len(announced), tokens_in, tokens_out,
+                )
+                yield _sse({"type": "error", "message": f"The coach didn't produce an answer (reason: {finish or 'unknown'}). Please try again."})
+                return
             await question_saved()  # the question is stored before the reply
             try:
                 await sb.insert("coach_messages", {"user_id": user_id, "role": "assistant", "content": answer})

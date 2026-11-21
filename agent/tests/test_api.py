@@ -172,3 +172,11 @@ async def test_stream_opens_with_a_flush_comment_and_still_saves_both_messages_i
     resp = await post(app, {"message": "hi"})
     assert resp.text.startswith(":") and [e["type"] for e in parse(resp.text)][-1] == "done"
     assert [r["role"] for _, r in fake.inserted] == ["user", "assistant"]
+
+
+async def test_empty_model_reply_is_reported_with_a_reason_and_not_saved():
+    app, fake, _ = build([""])  # the model streams nothing at all
+    resp = await post(app, {"message": "hi"})
+    events = parse(resp.text)
+    assert events[-1]["type"] == "error" and "didn't produce an answer" in events[-1]["message"]
+    assert [r["role"] for _, r in fake.inserted] == ["user"]  # no assistant message saved
