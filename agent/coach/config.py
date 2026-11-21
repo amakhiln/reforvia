@@ -19,7 +19,10 @@ class Settings:
     vapid_subject: str = field(default_factory=lambda: os.environ.get("VAPID_SUBJECT", ""))
     analyst_tz: str = field(default_factory=lambda: os.environ.get("ANALYST_TZ", "UTC"))
     analyst_max_users: int = field(default_factory=lambda: _int("ANALYST_MAX_USERS", 200))
-    model: str = field(default_factory=lambda: os.environ.get("COACH_MODEL", "claude-sonnet-5-5"))
+    # Models are reached through OpenRouter, so COACH_MODEL is any OpenRouter model id that supports tool calling.
+    openrouter_key: str = field(default_factory=lambda: os.environ.get("OPENROUTER_API_KEY", ""))
+    openrouter_url: str = field(default_factory=lambda: os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/"))
+    model: str = field(default_factory=lambda: os.environ.get("COACH_MODEL", "anthropic/claude-sonnet-5.5"))
     max_output_tokens: int = field(default_factory=lambda: _int("COACH_MAX_OUTPUT_TOKENS", 1024))
     daily_message_limit: int = field(default_factory=lambda: _int("DAILY_MESSAGE_LIMIT", 30))
     history_messages: int = field(default_factory=lambda: _int("COACH_HISTORY_MESSAGES", 20))

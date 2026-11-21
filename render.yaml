@@ -13,7 +13,7 @@ services:
         sync: false          # prompted in the dashboard
       - key: SUPABASE_PUBLISHABLE_KEY
         sync: false
-      - key: ANTHROPIC_API_KEY
+      - key: OPENROUTER_API_KEY   # from openrouter.ai/keys
         sync: false
       - key: ALLOWED_ORIGINS
         sync: false
@@ -29,6 +29,6 @@ services:
       - key: ANALYST_TZ
         value: Asia/Kolkata
       - key: COACH_MODEL
-        value: claude-sonnet-5-5
+        value: anthropic/claude-sonnet-5.5  # any OpenRouter model id with tool calling
       - key: DAILY_MESSAGE_LIMIT
         value: "30"

@@ -24,7 +24,7 @@ Personal workout tracker (built from the owner's Excel plan), designed to become
 - Keep UI polished: this is a product the owner presents as his own.
 
 ## Status
-Phases 1 to 4 done: logging, progress and PRs, Coach chat, weekly reviews with push. Not yet verified against real services: live Anthropic calls, real Supabase PostgREST queries, Docker build on Render, push delivery to phones.
+Phases 1 to 4 done: logging, progress and PRs, Coach chat, weekly reviews with push. Not yet verified against real services: live model calls through OpenRouter, real Supabase PostgREST queries, Docker build on Render, push delivery to phones.
 
 ## Next (Phase 5)
 Offline logging (queue sets locally and sync). Done: plan editor, wger exercise library import (provenance columns kept: source, license, author, source_url; media in `exercise_media` and the `exercise-media` bucket).

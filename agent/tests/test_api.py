@@ -156,3 +156,12 @@ async def test_history_read_failure_does_not_use_up_a_message():
     app, fake, _ = build(["x"], routes={"coach_messages": boom})
     assert (await post(app, {"message": "hi"})).status_code == 502
     assert fake.rpc_calls == [] and fake.inserted == []
+
+
+async def test_missing_openrouter_key_gives_a_clear_503_and_costs_nothing():
+    fake = FakeSupabase({"coach_messages": [], "rpc/agent_register_message": [{"allowed": True, "used": 1}]})
+    cfg = Settings(supabase_url="https://x.supabase.co", supabase_key="pub", openrouter_key="", allowed_origins=("https://app.example",))
+    app = create_app(settings=cfg, http=fake.client())  # no injected model, so it builds the real one and finds no key
+    resp = await post(app, {"message": "hi"})
+    assert resp.status_code == 503 and "OPENROUTER_API_KEY" in resp.json()["error"]
+    assert fake.rpc_calls == [] and fake.inserted == []

@@ -21,6 +21,7 @@ from .analyst import PushSend, build_analyst_graph, last_completed_week, make_we
 from .auth import AuthError, authenticate
 from .config import Settings
 from .graph import build_graph
+from .llm import build_model
 from .supa import SupabaseError, UserSupabase
 from .tools import TOOL_LABELS
 
@@ -83,9 +84,7 @@ def create_app(
     def get_llm(streaming: bool):
         if model is not None:
             return model
-        from langchain_anthropic import ChatAnthropic
-
-        return ChatAnthropic(model=settings.model, max_tokens=settings.max_output_tokens, streaming=streaming)
+        return build_model(settings, streaming)
 
     def get_graph():
         if state["graph"] is None:
@@ -123,7 +122,7 @@ def create_app(
             graph = get_graph()
         except Exception:
             log.exception("could not build the model")
-            return JSONResponse({"error": "The coach model isn't configured (is ANTHROPIC_API_KEY set?)."}, status_code=503)
+            return JSONResponse({"error": "The coach model isn't configured (is OPENROUTER_API_KEY set?)."}, status_code=503)
 
         sb = UserSupabase(settings.supabase_url, settings.supabase_key, token, client)
         today, tz = _local_today(body.tz)
@@ -217,7 +216,7 @@ def create_app(
             analyst = get_analyst()
         except Exception:
             log.exception("could not build the analyst model")
-            return JSONResponse({"error": "The model isn't configured (is ANTHROPIC_API_KEY set?)."}, status_code=503)
+            return JSONResponse({"error": "The model isn't configured (is OPENROUTER_API_KEY set?)."}, status_code=503)
         week = last_completed_week(settings.analyst_tz)
 
         async def job() -> dict[str, int]:
@@ -242,7 +241,7 @@ def create_app(
             analyst = get_analyst()
         except Exception:
             log.exception("could not build the analyst model")
-            return JSONResponse({"error": "The model isn't configured (is ANTHROPIC_API_KEY set?)."}, status_code=503)
+            return JSONResponse({"error": "The model isn't configured (is OPENROUTER_API_KEY set?)."}, status_code=503)
         week = last_completed_week(settings.analyst_tz)
         try:
             status = await summarise_user(service_client(settings, client), analyst, user_id, week, get_push())
