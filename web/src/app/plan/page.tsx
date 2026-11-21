@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "@yusufceng1z/ding-react";
 import { AppShell, ErrorNotice, InlineSpinner, Spinner } from "@/components/AppShell";
-import { ChevronIcon, CloseIcon, PlusIcon } from "@/components/icons";
+import { ChevronIcon, CloseIcon, PlusIcon, SwapIcon } from "@/components/icons";
 import { DAY_NAMES } from "@/lib/dates";
-import { parseRepTarget } from "@/lib/repTarget";
+import { defaultRep, parseRepTarget, replacementPatch } from "@/lib/repTarget";
 import { getSupabase } from "@/lib/supabase/client";
 
 type Item = {
@@ -14,6 +14,7 @@ type Item = {
   sort_order: number;
   planned_sets: number;
   rep_target: string;
+  is_timed: boolean;
   exercises: { name: string };
 };
 type Session = { id: string; name: string; day_of_week: number; is_optional: boolean; planned_exercises: Item[] };
@@ -34,7 +35,7 @@ export default function PlanPage() {
       const { data, error: sErr } = await sb
         .from("program_sessions")
         .select(
-          "id,name,day_of_week,is_optional,sort_order,planned_exercises(id,exercise_id,sort_order,planned_sets,rep_target,exercises(name))",
+          "id,name,day_of_week,is_optional,sort_order,planned_exercises(id,exercise_id,sort_order,planned_sets,rep_target,is_timed,exercises(name))",
         )
         .not("user_id", "is", null)
         .order("day_of_week")
@@ -125,7 +126,7 @@ function SessionCard({ session, onChanged }: { session: Session; onChanged: () =
       toast.error("You’re signed out. Please sign in again.");
       return;
     }
-    const rep = ex.is_timed ? { rep_target: "30–45 sec", rep_min: 30, rep_max: 45 } : { rep_target: "8–12", rep_min: 8, rep_max: 12 };
+    const rep = defaultRep(ex.is_timed);
     const ok = await run(() =>
       getSupabase()
         .from("planned_exercises")
@@ -166,6 +167,11 @@ function SessionCard({ session, onChanged }: { session: Session; onChanged: () =
             last={i === items.length - 1}
             onMove={(d) => move(i, d)}
             onSave={(patch) => run(() => getSupabase().from("planned_exercises").update(patch).eq("id", it.id))}
+            onReplace={(ex) =>
+              ex.id === it.exercise_id
+                ? Promise.resolve(toast.info("That’s already the exercise in this slot.")).then(() => false)
+                : run(() => getSupabase().from("planned_exercises").update(replacementPatch(it, ex)).eq("id", it.id))
+            }
             onRemove={() => run(() => getSupabase().from("planned_exercises").delete().eq("id", it.id))}
           />
         ))}
@@ -189,6 +195,7 @@ function Row({
   last,
   onMove,
   onSave,
+  onReplace,
   onRemove,
 }: {
   item: Item;
@@ -196,11 +203,13 @@ function Row({
   last: boolean;
   onMove: (dir: -1 | 1) => Promise<void>;
   onSave: (patch: Record<string, unknown>) => Promise<boolean>;
+  onReplace: (ex: Found) => Promise<boolean>;
   onRemove: () => Promise<boolean>;
 }) {
   const [sets, setSets] = useState(String(item.planned_sets));
   const [reps, setReps] = useState(item.rep_target);
   const [confirm, setConfirm] = useState(false);
+  const [replacing, setReplacing] = useState(false);
   const [busy, setBusy] = useState(false);
 
   async function commit() {
@@ -270,6 +279,14 @@ function Row({
         >
           <ChevronIcon />
         </button>
+        <button
+          onClick={() => setReplacing((r) => !r)}
+          aria-pressed={replacing}
+          aria-label={`Replace ${item.exercises.name}`}
+          className="flex size-9 items-center justify-center rounded-lg bg-surface-2 text-muted aria-pressed:text-accent"
+        >
+          <SwapIcon className="size-4" />
+        </button>
         {confirm ? (
           <>
             <button
@@ -293,6 +310,16 @@ function Row({
           </button>
         )}
       </div>
+      {replacing && (
+        <div className="mt-2">
+          <Picker
+            onPick={async (ex) => {
+              if (await onReplace(ex)) setReplacing(false);
+            }}
+            onCancel={() => setReplacing(false)}
+          />
+        </div>
+      )}
     </div>
   );
 }

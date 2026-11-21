@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseRepTarget } from "./repTarget.ts";
+import { parseRepTarget, replacementPatch } from "./repTarget.ts";
 
 test("parses ranges, single numbers, per-side and timed targets", () => {
   assert.deepEqual(parseRepTarget("8–12"), { rep_min: 8, rep_max: 12, per_side: false, is_timed: false });
@@ -15,4 +15,14 @@ test("rejects targets with no number or a backwards range", () => {
   assert.equal(parseRepTarget(""), null);
   assert.equal(parseRepTarget("max"), null);
   assert.equal(parseRepTarget("12–8"), null);
+});
+
+test("swapping like for like keeps sets and reps; timed and untimed resets the target", () => {
+  assert.deepEqual(replacementPatch({ is_timed: false }, { id: "x", is_timed: false }), { exercise_id: "x" });
+  assert.deepEqual(replacementPatch({ is_timed: true }, { id: "x", is_timed: false }), {
+    exercise_id: "x", is_timed: false, per_side: false, rep_target: "8–12", rep_min: 8, rep_max: 12,
+  });
+  assert.deepEqual(replacementPatch({ is_timed: false }, { id: "y", is_timed: true }), {
+    exercise_id: "y", is_timed: true, per_side: false, rep_target: "30–45 sec", rep_min: 30, rep_max: 45,
+  });
 });
