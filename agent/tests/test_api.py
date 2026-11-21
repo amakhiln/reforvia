@@ -66,9 +66,10 @@ async def test_streams_tool_status_tokens_and_persists_both_messages():
     resp = await post(app, {"message": "What's my plan?", "tz": "Asia/Kolkata"})
     assert resp.status_code == 200 and resp.headers["content-type"].startswith("text/event-stream")
     events = parse(resp.text)
-    assert events[0] == {"type": "tool", "label": "Checking your plan"}
-    assert "".join(e["text"] for e in events if e["type"] == "token") == "Today is your pull day."
-    assert events[-1] == {"type": "done"}
+    assert [e["type"] for e in events][:3] == ["RUN_STARTED", "TOOL_CALL_START", "TOOL_CALL_END"]
+    assert events[1]["toolCallName"] == "get_my_plan"
+    assert "".join(e["delta"] for e in events if e["type"] == "TEXT_MESSAGE_CONTENT") == "Today is your pull day."
+    assert [e["type"] for e in events][-2:] == ["TEXT_MESSAGE_END", "RUN_FINISHED"]
 
     # both sides of the exchange are saved, as the signed-in user
     assert [(t, r["role"], r["content"]) for t, r in fake.inserted] == [
@@ -111,14 +112,14 @@ async def test_model_failure_is_reported_without_leaking_details():
     app = create_app(settings=SETTINGS, model=Boom(script=["x"]), http=fake.client())
     resp = await post(app, {"message": "hi"})
     events = parse(resp.text)
-    assert events[-1]["type"] == "error" and "sk-ant" not in resp.text
+    assert events[-1]["type"] == "RUN_ERROR" and "sk-ant" not in resp.text
     assert [r["role"] for _, r in fake.inserted] == ["user"]  # no assistant message saved
 
 
 async def test_runaway_tool_loop_is_stopped():
     app, _, _ = build([("tool", "get_my_plan", {})])  # the script asks for a tool forever
     resp = await post(app, {"message": "loop"})
-    assert parse(resp.text)[-1]["type"] == "error" and "too many steps" in parse(resp.text)[-1]["message"]
+    assert parse(resp.text)[-1]["type"] == "RUN_ERROR" and "too many steps" in parse(resp.text)[-1]["message"]
 
 
 async def test_cors_only_for_configured_origin():
@@ -170,7 +171,7 @@ async def test_missing_openrouter_key_gives_a_clear_503_and_costs_nothing():
 async def test_stream_opens_with_a_flush_comment_and_still_saves_both_messages_in_order():
     app, fake, _ = build(["hello there"])
     resp = await post(app, {"message": "hi"})
-    assert resp.text.startswith(":") and [e["type"] for e in parse(resp.text)][-1] == "done"
+    assert resp.text.startswith(":") and [e["type"] for e in parse(resp.text)][-1] == "RUN_FINISHED"
     assert [r["role"] for _, r in fake.inserted] == ["user", "assistant"]
 
 
@@ -178,7 +179,7 @@ async def test_empty_model_reply_is_reported_with_a_reason_and_not_saved():
     app, fake, _ = build([""])  # the model streams nothing at all
     resp = await post(app, {"message": "hi"})
     events = parse(resp.text)
-    assert events[-1]["type"] == "error" and "didn't produce an answer" in events[-1]["message"]
+    assert events[-1]["type"] == "RUN_ERROR" and "didn't produce an answer" in events[-1]["message"]
     assert [r["role"] for _, r in fake.inserted] == ["user"]  # no assistant message saved
 
 
@@ -199,7 +200,7 @@ async def test_live_check_logs_invented_figures_but_still_delivers_the_reply(cap
     caplog.set_level(logging.WARNING, logger="coach")
     app, _, _ = build(["Go up to 62.5 kg next time."])
     resp = await post(app, {"message": "What should I lift?"})
-    assert parse(resp.text)[-1]["type"] == "done"  # never blocked
+    assert parse(resp.text)[-1]["type"] == "RUN_FINISHED"  # never blocked
     assert any("not found in the data" in r.message and "62.5" in r.message for r in caplog.records)
 
 
@@ -209,5 +210,13 @@ async def test_live_check_is_quiet_when_figures_come_from_the_tools(caplog):
     caplog.set_level(logging.WARNING, logger="coach")
     app, _, _ = build([("tool", "get_my_plan", {}), "Pull A has Lat pulldown at 3 x 8–12, so work toward 12 reps."])
     resp = await post(app, {"message": "What is my plan?"})
-    assert parse(resp.text)[-1]["type"] == "done"
+    assert parse(resp.text)[-1]["type"] == "RUN_FINISHED"
     assert not any("not found in the data" in r.message for r in caplog.records)
+
+
+async def test_volume_tool_result_is_also_sent_as_a_chart_card():
+    rows = [{"week_start": "2026-11-02", "sessions": 2, "sets": 20, "volume": 4000}, {"week_start": "2026-11-09", "sessions": 3, "sets": 30, "volume": 5400}]
+    app, _, _ = build([("tool", "get_weekly_volume", {}), "Up on last week."], routes={"rpc/weekly_summary": rows})
+    events = parse((await post(app, {"message": "volume?"})).text)
+    (card,) = [e for e in events if e["type"] == "CUSTOM" and e["name"] == "card"]
+    assert card["value"]["kind"] == "volume" and [w["volume_kg"] for w in card["value"]["weeks"]] == [4000, 5400]
