@@ -2,11 +2,49 @@ import { getSupabase } from "@/lib/supabase/client";
 
 export const COACH_URL = (process.env.NEXT_PUBLIC_COACH_URL ?? "").replace(/\/$/, "");
 
+/** What a tool result looks like once the server has turned it into something drawable. Numbers come from the tool, not the model. */
+export type CoachCard =
+  | { kind: "volume"; weeks: { week_of: string; sessions: number; sets: number; volume_kg: number }[] }
+  | { kind: "progress"; exercise: string; points: { date: string; est_1rm_kg: number; top_set: string }[]; next_load_kg: number | null }
+  | { kind: "bests"; rows: { exercise: string; set: string; est_1rm_kg: number | null; date: string }[] };
+
 export type CoachEvent =
-  | { type: "tool"; label: string }
+  | { type: "tool"; id: string; label: string }
+  | { type: "tool_done"; id: string }
+  | { type: "card"; card: CoachCard }
   | { type: "token"; text: string }
   | { type: "error"; message: string }
   | { type: "done" };
+
+const TOOL_LABELS: Record<string, string> = {
+  get_my_plan: "Checking your plan",
+  get_recent_workouts: "Reading your recent workouts",
+  find_exercise: "Searching exercises",
+  get_exercise_guide: "Looking up form cues",
+  get_exercise_progress: "Analysing your progress",
+  get_weekly_volume: "Checking your weekly volume",
+  get_personal_bests: "Checking your personal bests",
+};
+
+/** The server speaks AG-UI (docs.ag-ui.com). This keeps the page on a small set of events it cares about. */
+function fromAgUi(e: Record<string, unknown>): CoachEvent | null {
+  switch (e.type) {
+    case "TOOL_CALL_START":
+      return { type: "tool", id: String(e.toolCallId), label: TOOL_LABELS[String(e.toolCallName)] ?? "Working" };
+    case "TOOL_CALL_END":
+      return { type: "tool_done", id: String(e.toolCallId) };
+    case "CUSTOM":
+      return e.name === "card" ? { type: "card", card: e.value as CoachCard } : null;
+    case "TEXT_MESSAGE_CONTENT":
+      return { type: "token", text: String(e.delta ?? "") };
+    case "RUN_ERROR":
+      return { type: "error", message: String(e.message ?? "The coach hit a problem.") };
+    case "RUN_FINISHED":
+      return { type: "done" };
+    default:
+      return null; // RUN_STARTED, TEXT_MESSAGE_START/END, and anything newer
+  }
+}
 
 export class CoachHttpError extends Error {
   constructor(
@@ -63,11 +101,13 @@ export async function* streamCoach(message: string, signal?: AbortSignal): Async
       const frame = buffer.slice(0, idx);
       buffer = buffer.slice(idx + 2);
       if (!frame.startsWith("data: ")) continue;
+      let parsed: CoachEvent | null = null;
       try {
-        yield JSON.parse(frame.slice(6)) as CoachEvent;
+        parsed = fromAgUi(JSON.parse(frame.slice(6)));
       } catch {
         /* ignore a malformed frame */
       }
+      if (parsed) yield parsed;
     }
   }
 }

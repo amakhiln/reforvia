@@ -4,12 +4,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell, ErrorNotice, InlineSpinner } from "@/components/AppShell";
 import { SendIcon } from "@/components/icons";
+import { CoachCardView } from "@/components/CoachCards";
 import { RichText } from "@/components/RichText";
-import { COACH_URL, CoachHttpError, pingCoach, streamCoach } from "@/lib/coach";
+import { COACH_URL, CoachHttpError, pingCoach, streamCoach, type CoachCard } from "@/lib/coach";
 import { getSupabase } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
-type Msg = { id: string; role: "user" | "assistant"; content: string; failed?: boolean };
+type Step = { id: string; label: string; done: boolean };
+// steps and cards belong to the reply being streamed; they are not stored, so they show for this visit only
+type Msg = { id: string; role: "user" | "assistant"; content: string; failed?: boolean; steps?: Step[]; cards?: CoachCard[] };
 
 const SUGGESTIONS = [
   "What should I lift next session?",
@@ -27,6 +30,7 @@ export default function CoachPage() {
   const [service, setService] = useState<"checking" | "waking" | "ready" | "down">("checking");
   const [error, setError] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true); // keep following the reply only while the reader is near the bottom
   const abortRef = useRef<AbortController | null>(null);
@@ -100,6 +104,7 @@ export default function CoachPage() {
       const q = { text: "", raf: 0 };
       const append = (chunk: string) =>
         setMessages((m) => m?.map((x) => (x.id === aid ? { ...x, content: x.content + chunk } : x)) ?? m);
+      const patch = (f: (x: Msg) => Msg) => setMessages((m) => m?.map((x) => (x.id === aid ? f(x) : x)) ?? m);
       const pump = () => {
         if (!q.text) {
           q.raf = 0;
@@ -128,8 +133,14 @@ export default function CoachPage() {
 
       try {
         for await (const ev of streamCoach(content, ctrl.signal)) {
-          if (ev.type === "tool") setStatus(`${ev.label}…`);
-          else if (ev.type === "token") {
+          if (ev.type === "tool") {
+            setStatus(`${ev.label}…`);
+            patch((x) => ({ ...x, steps: [...(x.steps ?? []), { id: ev.id, label: ev.label, done: false }] }));
+          } else if (ev.type === "tool_done") {
+            patch((x) => ({ ...x, steps: x.steps?.map((t) => (t.id === ev.id ? { ...t, done: true } : t)) }));
+          } else if (ev.type === "card") {
+            patch((x) => ({ ...x, cards: [...(x.cards ?? []), ev.card] }));
+          } else if (ev.type === "token") {
             setStatus(null);
             push(ev.text);
           } else if (ev.type === "error") failed = ev.message;
@@ -165,6 +176,16 @@ export default function CoachPage() {
     setConfirmClear(false);
     if (error) setError(error.message);
     else setMessages([]);
+  }
+
+  async function copy(m: Msg) {
+    try {
+      await navigator.clipboard.writeText(m.content);
+      setCopied(m.id);
+      setTimeout(() => setCopied((c) => (c === m.id ? null : c)), 1500);
+    } catch {
+      /* clipboard can be blocked; nothing to recover */
+    }
   }
 
   const empty = messages !== null && messages.length === 0;
@@ -244,7 +265,17 @@ export default function CoachPage() {
 
       <div className="space-y-3" aria-live="polite">
         {messages?.map((m) => (
-          <div key={m.id} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
+          <div key={m.id} className={m.role === "user" ? "flex justify-end" : "flex flex-col items-start gap-2"}>
+            {m.steps && m.steps.length > 0 && (
+              <ul aria-label="What the coach looked at" className="flex max-w-[88%] flex-wrap gap-1.5">
+                {m.steps.map((t) => (
+                  <li key={t.id} className="tag flex items-center gap-1.5 rounded-lg border border-line px-2 py-1 text-muted">
+                    <span className={`size-1.5 rounded-full ${t.done ? "bg-accent" : "animate-pulse bg-muted"}`} aria-hidden />
+                    {t.label}
+                  </li>
+                ))}
+              </ul>
+            )}
             <div
               className={`max-w-[88%] rounded-2xl px-4 py-3 text-[15px] ${
                 m.role === "user" ? "rounded-br-md bg-accent text-accent-ink" : "rounded-bl-md bg-surface"
@@ -261,6 +292,16 @@ export default function CoachPage() {
                 </span>
               )}
             </div>
+            {m.cards?.map((card, i) => (
+              <div key={i} className="w-full">
+                <CoachCardView card={card} />
+              </div>
+            ))}
+            {m.role === "assistant" && m.content && !(busy && m.id === messages[messages.length - 1].id) && (
+              <button onClick={() => void copy(m)} className="tag rounded-lg px-2 py-1 text-muted active:text-ink">
+                {copied === m.id ? "Copied" : "Copy"}
+              </button>
+            )}
           </div>
         ))}
         {busy && status && messages?.[messages.length - 1]?.content && (

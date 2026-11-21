@@ -5,6 +5,7 @@ import json
 import logging
 import math
 import time
+import uuid
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from typing import Any, AsyncIterator
@@ -22,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from .analyst import PushSend, build_analyst_graph, last_completed_week, make_web_push, run_weekly, service_client, summarise_user
 from .auth import AuthError, authenticate
+from .cards import card_for
 from .config import Settings
 from .graph import build_graph
 from .grounding import ungrounded
@@ -29,7 +31,6 @@ from .llm import build_model
 from .prompts import build_system_prompt
 from .ratelimit import SlidingWindow
 from .supa import SupabaseError, UserSupabase
-from .tools import TOOL_LABELS
 
 log = logging.getLogger("coach")
 
@@ -188,10 +189,22 @@ def create_app(
             final: dict[str, Any] | None = None  # the finished conversation, including what the tools returned
             last_step: int | None = None
             tokens_in = tokens_out = 0
+            run_id, msg_id = str(uuid.uuid4()), str(uuid.uuid4())
+            text_open = False
+            seen_results: set[str] = set()
+            # Events follow the AG-UI protocol (docs.ag-ui.com) so a standard client can read the stream later.
+            yield _sse({"type": "RUN_STARTED", "threadId": "coach", "runId": run_id})
             try:
                 async for mode, payload in graph.astream({"messages": messages}, config=cfg, stream_mode=["messages", "values"]):
                     if mode == "values":
                         final = payload
+                        for msg in payload.get("messages", []):
+                            if isinstance(msg, ToolMessage) and msg.tool_call_id not in seen_results:
+                                seen_results.add(msg.tool_call_id)
+                                yield _sse({"type": "TOOL_CALL_END", "toolCallId": msg.tool_call_id})
+                                card = card_for(msg.name or "", _text(msg.content) or str(msg.content))
+                                if card:
+                                    yield _sse({"type": "CUSTOM", "name": "card", "value": card})
                         continue
                     chunk, meta = payload
                     if meta.get("langgraph_node") != "agent":
@@ -200,18 +213,21 @@ def create_app(
                         name, tc_id = tc.get("name"), tc.get("id")
                         if name and tc_id and tc_id not in announced:
                             announced.add(tc_id)
-                            yield _sse({"type": "tool", "label": TOOL_LABELS.get(name, "Working")})
+                            yield _sse({"type": "TOOL_CALL_START", "toolCallId": tc_id, "toolCallName": name})
                     text = _text(chunk.content)
                     if text:
+                        if not text_open:
+                            text_open = True
+                            yield _sse({"type": "TEXT_MESSAGE_START", "messageId": msg_id, "role": "assistant"})
                         step = meta.get("langgraph_step")
                         if buf and last_step is not None and step != last_step:
                             buf.append("\n\n")
-                            yield _sse({"type": "token", "text": "\n\n"})
+                            yield _sse({"type": "TEXT_MESSAGE_CONTENT", "messageId": msg_id, "delta": "\n\n"})
                         last_step = step
                         if first_token is None:
                             first_token = time.perf_counter() - t_model
                         buf.append(text)
-                        yield _sse({"type": "token", "text": text})
+                        yield _sse({"type": "TEXT_MESSAGE_CONTENT", "messageId": msg_id, "delta": text})
                     reason = (getattr(chunk, "response_metadata", None) or {}).get("finish_reason")
                     if reason:
                         finish = reason
@@ -220,11 +236,11 @@ def create_app(
                         tokens_in += int(usage.get("input_tokens", 0) or 0)
                         tokens_out += int(usage.get("output_tokens", 0) or 0)
             except GraphRecursionError:
-                yield _sse({"type": "error", "message": "That took too many steps. Try a more specific question."})
+                yield _sse({"type": "RUN_ERROR", "message": "That took too many steps. Try a more specific question."})
                 return
             except Exception:
                 log.exception("coach run failed")
-                yield _sse({"type": "error", "message": "The coach hit a problem. Please try again."})
+                yield _sse({"type": "RUN_ERROR", "message": "The coach hit a problem. Please try again."})
                 return
 
             answer = "".join(buf).strip()
@@ -235,7 +251,7 @@ def create_app(
                     "(finish_reason=length means hidden reasoning used the whole output limit: lower COACH_REASONING or raise COACH_MAX_OUTPUT_TOKENS)",
                     settings.model, finish, len(announced), tokens_in, tokens_out, settings.reasoning, settings.max_output_tokens,
                 )
-                yield _sse({"type": "error", "message": f"The coach didn't produce an answer (reason: {finish or 'unknown'}). Please try again."})
+                yield _sse({"type": "RUN_ERROR", "message": f"The coach didn't produce an answer (reason: {finish or 'unknown'}). Please try again."})
                 return
             # Live check: does the reply state figures that are in neither the data the tools returned, the conversation,
             # nor the Coach's own instructions? Only logged, never blocked. It runs while the reply is being saved.
@@ -261,7 +277,8 @@ def create_app(
                 "coach reply: before model %.2fs, model first token %.2fs, total %.2fs, tools %d, tokens in/out %d/%d, unsourced figures %d",
                 t_model - t0, first_token or 0.0, time.perf_counter() - t0, len(announced), tokens_in, tokens_out, len(unsourced),
             )
-            yield _sse({"type": "done"})
+            yield _sse({"type": "TEXT_MESSAGE_END", "messageId": msg_id})
+            yield _sse({"type": "RUN_FINISHED", "threadId": "coach", "runId": run_id})
 
         async def events() -> AsyncIterator[str]:
             # An SSE comment with padding goes out first so any proxy in the path starts passing bytes through at once.
