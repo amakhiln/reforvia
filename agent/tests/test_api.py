@@ -180,3 +180,34 @@ async def test_empty_model_reply_is_reported_with_a_reason_and_not_saved():
     events = parse(resp.text)
     assert events[-1]["type"] == "error" and "didn't produce an answer" in events[-1]["message"]
     assert [r["role"] for _, r in fake.inserted] == ["user"]  # no assistant message saved
+
+
+async def test_per_minute_limit_refuses_a_burst_before_any_database_or_model_work():
+    cfg = Settings(supabase_url="https://x.supabase.co", supabase_key="pub", allowed_origins=("https://app.example",), rate_per_minute=2)
+    app, fake, model = build(["ok"], settings=cfg)
+    assert (await post(app, {"message": "one"})).status_code == 200
+    assert (await post(app, {"message": "two"})).status_code == 200
+    third = await post(app, {"message": "three"})
+    assert third.status_code == 429 and "too quickly" in third.json()["error"] and int(third.headers["retry-after"]) >= 1
+    assert [n for n, _ in fake.rpc_calls].count("agent_register_message") == 2  # the refused one never reached the database
+    assert len(model.seen) == 2
+
+
+async def test_live_check_logs_invented_figures_but_still_delivers_the_reply(caplog):
+    import logging
+
+    caplog.set_level(logging.WARNING, logger="coach")
+    app, _, _ = build(["Go up to 62.5 kg next time."])
+    resp = await post(app, {"message": "What should I lift?"})
+    assert parse(resp.text)[-1]["type"] == "done"  # never blocked
+    assert any("not found in the data" in r.message and "62.5" in r.message for r in caplog.records)
+
+
+async def test_live_check_is_quiet_when_figures_come_from_the_tools(caplog):
+    import logging
+
+    caplog.set_level(logging.WARNING, logger="coach")
+    app, _, _ = build([("tool", "get_my_plan", {}), "Pull A has Lat pulldown at 3 x 8–12, so work toward 12 reps."])
+    resp = await post(app, {"message": "What is my plan?"})
+    assert parse(resp.text)[-1]["type"] == "done"
+    assert not any("not found in the data" in r.message for r in caplog.records)

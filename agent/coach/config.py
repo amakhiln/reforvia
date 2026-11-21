@@ -31,6 +31,7 @@ class Settings:
     model: str = field(default_factory=lambda: os.environ.get("COACH_MODEL", "anthropic/claude-sonnet-5.5"))
     max_output_tokens: int = field(default_factory=lambda: _int("COACH_MAX_OUTPUT_TOKENS", 4096))
     daily_message_limit: int = field(default_factory=lambda: _int("DAILY_MESSAGE_LIMIT", 30))
+    rate_per_minute: int = field(default_factory=lambda: _int("COACH_RATE_PER_MINUTE", 6))  # messages per user per minute; 0 turns it off
     history_messages: int = field(default_factory=lambda: _int("COACH_HISTORY_MESSAGES", 20))
     allowed_origins: tuple[str, ...] = field(
         default_factory=lambda: tuple(o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip())

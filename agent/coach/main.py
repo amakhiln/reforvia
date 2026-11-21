@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import time
 from contextlib import asynccontextmanager
 from datetime import date, datetime
@@ -15,7 +16,7 @@ import hmac
 from fastapi import BackgroundTasks, FastAPI, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.errors import GraphRecursionError
 from pydantic import BaseModel, Field
 
@@ -23,7 +24,10 @@ from .analyst import PushSend, build_analyst_graph, last_completed_week, make_we
 from .auth import AuthError, authenticate
 from .config import Settings
 from .graph import build_graph
+from .grounding import ungrounded
 from .llm import build_model
+from .prompts import build_system_prompt
+from .ratelimit import SlidingWindow
 from .supa import SupabaseError, UserSupabase
 from .tools import TOOL_LABELS
 
@@ -59,6 +63,7 @@ def create_app(
     settings: Settings | None = None, model: Any = None, http: httpx.AsyncClient | None = None, push: PushSend | None = None
 ) -> FastAPI:
     settings = settings or Settings()
+    limiter = SlidingWindow(settings.rate_per_minute)
     state: dict[str, Any] = {"http": http, "graph": None, "analyst": None, "push": push, "push_built": push is not None}
 
     @asynccontextmanager
@@ -119,6 +124,15 @@ def create_app(
         except AuthError as exc:
             return JSONResponse({"error": str(exc)}, status_code=401)
 
+        wait = limiter.hit(user_id)  # before any database or model work, so a refused burst costs nothing
+        if wait:
+            secs = math.ceil(wait)
+            return JSONResponse(
+                {"error": f"You're sending messages too quickly. Wait {secs} second{'s' if secs != 1 else ''} and try again."},
+                status_code=429,
+                headers={"Retry-After": str(secs)},
+            )
+
         # Do everything that can fail cheaply before the message is counted against the daily cap,
         # so a misconfigured model or a database hiccup never costs the user a message.
         try:
@@ -171,10 +185,15 @@ def create_app(
             t_model = time.perf_counter()
             first_token: float | None = None
             finish: str | None = None
+            final: dict[str, Any] | None = None  # the finished conversation, including what the tools returned
             last_step: int | None = None
             tokens_in = tokens_out = 0
             try:
-                async for chunk, meta in graph.astream({"messages": messages}, config=cfg, stream_mode="messages"):
+                async for mode, payload in graph.astream({"messages": messages}, config=cfg, stream_mode=["messages", "values"]):
+                    if mode == "values":
+                        final = payload
+                        continue
+                    chunk, meta = payload
                     if meta.get("langgraph_node") != "agent":
                         continue
                     for tc in getattr(chunk, "tool_call_chunks", None) or []:
@@ -218,6 +237,12 @@ def create_app(
                 )
                 yield _sse({"type": "error", "message": f"The coach didn't produce an answer (reason: {finish or 'unknown'}). Please try again."})
                 return
+            # Live check: does the reply state figures that are in neither the data the tools returned, the conversation,
+            # nor the Coach's own instructions? Only logged, never blocked. It runs while the reply is being saved.
+            sources = [
+                _text(msg.content) or str(msg.content) for msg in (final or {}).get("messages", []) if isinstance(msg, ToolMessage)
+            ] + [r["content"] for r in rows] + [build_system_prompt(today, tz)]
+            check = asyncio.create_task(asyncio.to_thread(ungrounded, answer, sources, body.message))
             await question_saved()  # the question is stored before the reply
             try:
                 await sb.insert("coach_messages", {"user_id": user_id, "role": "assistant", "content": answer})
@@ -225,9 +250,16 @@ def create_app(
                     await sb.rpc("agent_add_tokens", {"p_day": today.isoformat(), "p_input": tokens_in, "p_output": tokens_out})
             except SupabaseError as exc:
                 log.warning("could not save coach reply: %s", exc)
+            try:
+                unsourced = await check
+            except Exception:  # a failing check must never break a reply
+                log.exception("number check failed")
+                unsourced = []
+            if unsourced:
+                log.warning("reply has figures not found in the data: %s (model %s, %d tools)", unsourced[:6], settings.model, len(announced))
             log.info(
-                "coach reply: before model %.2fs, model first token %.2fs, total %.2fs, tools %d, tokens in/out %d/%d",
-                t_model - t0, first_token or 0.0, time.perf_counter() - t0, len(announced), tokens_in, tokens_out,
+                "coach reply: before model %.2fs, model first token %.2fs, total %.2fs, tools %d, tokens in/out %d/%d, unsourced figures %d",
+                t_model - t0, first_token or 0.0, time.perf_counter() - t0, len(announced), tokens_in, tokens_out, len(unsourced),
             )
             yield _sse({"type": "done"})
 
