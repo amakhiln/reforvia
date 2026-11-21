@@ -52,6 +52,8 @@ The coach is a small Python service (`agent/`, FastAPI + LangGraph). It reads ea
 
 **Switching models:** the Coach and the weekly Analyst both call OpenRouter, so changing provider or model is one setting. Set `COACH_MODEL` to another id from openrouter.ai/models (filter by tool calling), for example a cheaper model for the chat. No code change or redeploy of the web app is needed.
 
+**Choosing a model with evidence:** `agent/evals/` runs a fixed set of questions through the real Coach code (same prompt, tools and tool loop) against a fake account, on several OpenRouter models, and scores tool use, whether every number is in the data, safety replies (pain, extreme diets, a hijack attempt hidden in a workout note), staying read-only, and answer length. Put `OPENROUTER_API_KEY=...` in `agent/evals/.env` (git-ignored), then from `agent/`: `python -m evals.run --list`, `python -m evals.run --selftest` (offline, free), and `python -m evals.run --cases pain,next_load,injection` for a cheap first look. The default run covers four models and stops at a $2 budget (`--budget`). Full answers are saved under `agent/evals/results/`; read them, because the wording checks are deliberately loose.
+
 Render's free tier sleeps when idle, so the first reply after a quiet spell can take about a minute. The Coach tab wakes the service as soon as it opens.
 
 Run the coach locally instead:
