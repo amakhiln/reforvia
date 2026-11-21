@@ -28,6 +28,7 @@ export default function CoachPage() {
   const [error, setError] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const stick = useRef(true); // keep following the reply only while the reader is near the bottom
   const abortRef = useRef<AbortController | null>(null);
 
   const load = useCallback(async () => {
@@ -63,8 +64,17 @@ export default function CoachPage() {
   }, []);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, status]);
+    const onScroll = () => {
+      stick.current = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 200;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // "auto" while streaming: a smooth scroll restarted on every token never catches up and looks stuck.
+  useEffect(() => {
+    if (stick.current) endRef.current?.scrollIntoView({ behavior: busy ? "auto" : "smooth", block: "end" });
+  }, [messages, status, busy]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
@@ -74,6 +84,7 @@ export default function CoachPage() {
       if (!content || busy || !COACH_URL) return;
       setError(null);
       setDraft("");
+      stick.current = true;
       setBusy(true);
       setStatus("Thinking");
       const uid = crypto.randomUUID();
@@ -83,14 +94,47 @@ export default function CoachPage() {
       const ctrl = new AbortController();
       abortRef.current = ctrl;
       let failed: string | null = null;
+
+      // Text arrives from the network in bursts. Drip it onto the screen a few characters per frame so it reads as
+      // typing; a big backlog is paid down faster so the display never lags far behind.
+      const q = { text: "", raf: 0 };
+      const append = (chunk: string) =>
+        setMessages((m) => m?.map((x) => (x.id === aid ? { ...x, content: x.content + chunk } : x)) ?? m);
+      const pump = () => {
+        if (!q.text) {
+          q.raf = 0;
+          return;
+        }
+        const n = Math.max(1, Math.ceil(q.text.length / 8));
+        append(q.text.slice(0, n));
+        q.text = q.text.slice(n);
+        q.raf = q.text ? requestAnimationFrame(pump) : 0;
+      };
+      const push = (t: string) => {
+        q.text += t;
+        if (!q.raf) q.raf = requestAnimationFrame(pump);
+      };
+      const drained = () =>
+        new Promise<void>((res) => {
+          const check = () => (q.text ? requestAnimationFrame(check) : res());
+          check();
+        });
+      const flush = () => {
+        cancelAnimationFrame(q.raf);
+        q.raf = 0;
+        if (q.text) append(q.text);
+        q.text = "";
+      };
+
       try {
         for await (const ev of streamCoach(content, ctrl.signal)) {
           if (ev.type === "tool") setStatus(`${ev.label}…`);
           else if (ev.type === "token") {
             setStatus(null);
-            setMessages((m) => m?.map((x) => (x.id === aid ? { ...x, content: x.content + ev.text } : x)) ?? m);
+            push(ev.text);
           } else if (ev.type === "error") failed = ev.message;
         }
+        await drained();
       } catch (e) {
         if (ctrl.signal.aborted) return;
         if (e instanceof CoachHttpError && e.status === 401) {
@@ -99,6 +143,7 @@ export default function CoachPage() {
         }
         failed = e instanceof CoachHttpError ? e.message : "Couldn’t reach the coach. Check your connection and try again.";
       } finally {
+        flush(); // anything still queued (after an error or abort) is shown at once
         setBusy(false);
         setStatus(null);
       }
@@ -228,7 +273,7 @@ export default function CoachPage() {
           <ErrorNotice message={error} />
         </div>
       )}
-      <div ref={endRef} className="h-24" />
+      <div ref={endRef} className="h-44" /> {/* clears the fixed message box and the tab bar */}
 
       {COACH_URL && (
         <form

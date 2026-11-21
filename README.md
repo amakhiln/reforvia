@@ -47,7 +47,7 @@ The coach is a small Python service (`agent/`, FastAPI + LangGraph). It reads ea
    | `OPENROUTER_API_KEY` | from openrouter.ai/keys (usage is billed there) |
    | `ALLOWED_ORIGINS` | where the web app runs, e.g. `http://localhost:3000,https://your-app.example` |
 
-   Optional: `COACH_MODEL` (an OpenRouter model id that supports tool calling; default `anthropic/claude-sonnet-5.5`), `DAILY_MESSAGE_LIMIT` (default 30 per user per day), `COACH_HISTORY_MESSAGES`, `COACH_MAX_OUTPUT_TOKENS`.
+   Optional: `OPENROUTER_PROVIDER_SORT` (default `latency`: OpenRouter picks the provider that answers fastest; empty to turn off), `COACH_MODEL` (an OpenRouter model id that supports tool calling; default `anthropic/claude-sonnet-5.5`), `DAILY_MESSAGE_LIMIT` (default 30 per user per day), `COACH_HISTORY_MESSAGES`, `COACH_MAX_OUTPUT_TOKENS`.
 4. In `web/.env.local` set `NEXT_PUBLIC_COACH_URL` to the Render URL (no trailing slash) and restart the web app.
 
 **Switching models:** the Coach and the weekly Analyst both call OpenRouter, so changing provider or model is one setting. Set `COACH_MODEL` to another id from openrouter.ai/models (filter by tool calling), for example a cheaper model for the chat. No code change or redeploy of the web app is needed.

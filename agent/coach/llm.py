@@ -21,4 +21,5 @@ def build_model(settings: Settings, streaming: bool) -> BaseChatModel:
         stream_usage=True,  # token counts for the daily usage record arrive on the last streamed chunk
         use_responses_api=False,  # OpenRouter's stable surface is Chat Completions
         default_headers={"X-Title": "Reforvia"},
+        extra_body={"provider": {"sort": settings.provider_sort}} if settings.provider_sort else None,
     )

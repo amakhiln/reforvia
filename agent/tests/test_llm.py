@@ -13,11 +13,16 @@ def test_model_is_built_for_openrouter_with_the_configured_id():
     assert m.model_name == "google/gemini-test"
     assert str(m.openai_api_base) == "https://openrouter.ai/api/v1"
     assert m.max_tokens == 321 and m.streaming and m.stream_usage
+    assert m.extra_body == {"provider": {"sort": "latency"}}
 
 
 def test_base_url_and_model_can_be_overridden():
     m = build_model(settings(openrouter_url="https://proxy.example/v1", model="deepseek/x"), streaming=False)
     assert m.openai_api_base == "https://proxy.example/v1" and m.model_name == "deepseek/x" and not m.streaming
+
+
+def test_provider_routing_can_be_turned_off():
+    assert build_model(settings(provider_sort=""), streaming=True).extra_body is None
 
 
 def test_missing_key_is_refused_before_any_request():

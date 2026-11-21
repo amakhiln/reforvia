@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import time
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from typing import Any, AsyncIterator
@@ -110,6 +112,7 @@ def create_app(
         if settings.missing():
             return JSONResponse({"error": "The coach service is not configured."}, status_code=503)
         client: httpx.AsyncClient = state["http"]
+        t0 = time.perf_counter()
 
         try:
             user_id, token = await authenticate(authorization, settings.supabase_url, settings.supabase_key, client)
@@ -138,10 +141,20 @@ def create_app(
                     {"error": f"You've reached today's limit of {settings.daily_message_limit} coach messages. It resets tomorrow."},
                     status_code=429,
                 )
-            await sb.insert("coach_messages", {"user_id": user_id, "role": "user", "content": body.message})
         except SupabaseError as exc:
             log.warning("database error before chat: %s", exc)
             return JSONResponse({"error": "The coach couldn't reach your data. Try again in a moment."}, status_code=502)
+
+        # Saving the question runs alongside the model call instead of in front of it; it is awaited before the reply is saved.
+        save_question = asyncio.create_task(
+            sb.insert("coach_messages", {"user_id": user_id, "role": "user", "content": body.message})
+        )
+
+        async def question_saved() -> None:
+            try:
+                await save_question
+            except SupabaseError as exc:
+                log.warning("could not save the question: %s", exc)
 
         history = [
             (HumanMessage if r["role"] == "user" else AIMessage)(content=r["content"]) for r in reversed(rows)
@@ -152,9 +165,11 @@ def create_app(
 
         cfg = {"configurable": {"sb": sb, "tz": tz}, "recursion_limit": 14}
 
-        async def events() -> AsyncIterator[str]:
+        async def stream() -> AsyncIterator[str]:
             buf: list[str] = []
             announced: set[str] = set()
+            t_model = time.perf_counter()
+            first_token: float | None = None
             last_step: int | None = None
             tokens_in = tokens_out = 0
             try:
@@ -173,6 +188,8 @@ def create_app(
                             buf.append("\n\n")
                             yield _sse({"type": "token", "text": "\n\n"})
                         last_step = step
+                        if first_token is None:
+                            first_token = time.perf_counter() - t_model
                         buf.append(text)
                         yield _sse({"type": "token", "text": text})
                     usage = getattr(chunk, "usage_metadata", None)
@@ -188,13 +205,27 @@ def create_app(
                 return
 
             answer = "".join(buf).strip() or "I couldn't put an answer together. Please try again."
+            await question_saved()  # the question is stored before the reply
             try:
                 await sb.insert("coach_messages", {"user_id": user_id, "role": "assistant", "content": answer})
                 if tokens_in or tokens_out:
                     await sb.rpc("agent_add_tokens", {"p_day": today.isoformat(), "p_input": tokens_in, "p_output": tokens_out})
             except SupabaseError as exc:
                 log.warning("could not save coach reply: %s", exc)
+            log.info(
+                "coach reply: before model %.2fs, model first token %.2fs, total %.2fs, tools %d, tokens in/out %d/%d",
+                t_model - t0, first_token or 0.0, time.perf_counter() - t0, len(announced), tokens_in, tokens_out,
+            )
             yield _sse({"type": "done"})
+
+        async def events() -> AsyncIterator[str]:
+            # An SSE comment with padding goes out first so any proxy in the path starts passing bytes through at once.
+            yield ":" + " " * 2048 + "\n\n"
+            try:
+                async for frame in stream():
+                    yield frame
+            finally:
+                await question_saved()
 
         return StreamingResponse(
             events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}

@@ -165,3 +165,10 @@ async def test_missing_openrouter_key_gives_a_clear_503_and_costs_nothing():
     resp = await post(app, {"message": "hi"})
     assert resp.status_code == 503 and "OPENROUTER_API_KEY" in resp.json()["error"]
     assert fake.rpc_calls == [] and fake.inserted == []
+
+
+async def test_stream_opens_with_a_flush_comment_and_still_saves_both_messages_in_order():
+    app, fake, _ = build(["hello there"])
+    resp = await post(app, {"message": "hi"})
+    assert resp.text.startswith(":") and [e["type"] for e in parse(resp.text)][-1] == "done"
+    assert [r["role"] for _, r in fake.inserted] == ["user", "assistant"]
