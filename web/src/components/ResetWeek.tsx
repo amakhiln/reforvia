@@ -55,7 +55,7 @@ export function ResetWeek({ onDone }: { onDone: () => void }) {
             <button
               onClick={() => void run(pending)}
               disabled={busy}
-              className={`tag inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl text-white disabled:opacity-50 ${pending === "logs" ? "bg-danger" : "bg-accent text-accent-ink"}`}
+              className={`tag inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl disabled:opacity-50 ${pending === "logs" ? "bg-danger text-bg" : "bg-accent text-accent-ink"}`}
             >
               {busy ? (
                 <>

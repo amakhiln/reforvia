@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "@yusufceng1z/ding-react";
-import { AppShell, ErrorNotice, Spinner } from "@/components/AppShell";
+import { AppShell, ErrorNotice, InlineSpinner, Spinner } from "@/components/AppShell";
 import { PlusIcon } from "@/components/icons";
 import { ExerciseCard } from "@/components/ExerciseCard";
 import { ExercisePicker, type Found } from "@/components/ExercisePicker";
@@ -26,6 +26,8 @@ export function WorkoutClient() {
   const [previous, setPrevious] = useState<Record<string, PreviousSet[]>>({});
   const [openId, setOpenId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [alsoPlan, setAlsoPlan] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rest, setRest] = useState<{ endsAt: number; total: number } | null>(null);
@@ -270,6 +272,18 @@ export function WorkoutClient() {
     }
   }
 
+  async function resetWorkout() {
+    setResetting(true);
+    const { error } = await getSupabase().from("workouts").delete().eq("id", id); // sets and exercises go with it
+    if (error) {
+      setResetting(false);
+      return flash(`Couldn’t reset: ${msg(error)}`);
+    }
+    takeBundle(id); // drop any preloaded copy
+    toast.success("Workout reset");
+    router.replace("/");
+  }
+
   const summary = useMemo(() => {
     const all = items ?? [];
     return {
@@ -346,6 +360,37 @@ export function WorkoutClient() {
           >
             {workout.finished_at ? "Reopen workout" : "Finish workout"}
           </button>
+
+          {confirmReset ? (
+            <div role="alertdialog" aria-label="Reset this workout" className="rounded-2xl bg-surface p-4">
+              <p className="text-sm">
+                This deletes everything you logged in this workout, and the session goes back to not started. Your plan and
+                other days stay as they are.
+              </p>
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={() => void resetWorkout()}
+                  disabled={resetting}
+                  className="tag inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-danger text-bg disabled:opacity-50"
+                >
+                  {resetting ? (
+                    <>
+                      <InlineSpinner /> Resetting…
+                    </>
+                  ) : (
+                    "Reset workout"
+                  )}
+                </button>
+                <button onClick={() => setConfirmReset(false)} disabled={resetting} className="tag h-11 rounded-xl border-2 border-line px-4">
+                  Keep
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setConfirmReset(true)} className="tag h-11 w-full rounded-xl border-2 border-line text-danger">
+              Reset this workout
+            </button>
+          )}
         </div>
       )}
 

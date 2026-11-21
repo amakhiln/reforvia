@@ -132,7 +132,7 @@ export default function CoachPage() {
         messages && messages.length > 0 && !busy ? (
           confirmClear ? (
             <span className="flex items-center gap-1 text-sm">
-              <button onClick={clearChat} className="tag rounded-lg bg-danger px-2.5 py-1.5 text-white">
+              <button onClick={clearChat} className="tag rounded-lg bg-danger px-2.5 py-1.5 text-bg">
                 Delete chat
               </button>
               <button onClick={() => setConfirmClear(false)} className="tag rounded-lg px-2 py-1.5 text-muted">

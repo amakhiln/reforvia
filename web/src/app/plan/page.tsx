@@ -295,7 +295,7 @@ function Row({
             <button
               onClick={() => void guarded(onRemove)}
               disabled={busy}
-              className="tag inline-flex h-9 items-center gap-1.5 rounded-lg bg-danger px-3 text-white"
+              className="tag inline-flex h-9 items-center gap-1.5 rounded-lg bg-danger px-3 text-bg"
             >
               {busy ? <InlineSpinner /> : "Remove"}
             </button>

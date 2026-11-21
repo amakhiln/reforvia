@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { toast } from "@yusufceng1z/ding-react";
 import { AppShell, ErrorNotice, InlineSpinner, SetupNotice, Spinner } from "@/components/AppShell";
 import { Dial } from "@/components/Dial";
@@ -17,6 +17,7 @@ import type { ProgramSession, Workout } from "@/lib/types";
 
 export function TodayClient() {
   const router = useRouter();
+  const pathname = usePathname();
   const [sessions, setSessions] = useState<ProgramSession[] | null>(null);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -70,10 +71,11 @@ export function TodayClient() {
   }, [load]);
 
   useEffect(() => {
-    // Fetch on mount; state is only set after the awaited requests resolve.
+    // Fetch on mount, and again whenever we come back to "/": this view is kept alive, so it can be stale after a
+    // workout was started or reset. State is only set after the awaited requests resolve.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (isSupabaseConfigured) void load();
-  }, [load]);
+    if (isSupabaseConfigured && pathname === "/") void load();
+  }, [load, pathname]);
 
   const workoutFor = useMemo(() => {
     const map = new Map<string, Workout>();
