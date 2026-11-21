@@ -92,6 +92,15 @@ export default function ProgressPage() {
             <p className="tag mt-3 opacity-75">
               {delta == null ? "No earlier week to compare" : `${delta >= 0 ? "+" : "−"}${Math.abs(Math.round(delta))}% vs last week`}
             </p>
+            <p className="mt-3 text-sm opacity-80">Total weight you lifted this week: weight × reps, added up for every set.</p>
+            <details className="mt-2 text-sm">
+              <summary className="tag w-fit underline opacity-75">How is this counted?</summary>
+              <ul className="mt-2 list-disc space-y-1 pl-5 opacity-90">
+                <li>Each set counts weight × reps. 60 kg × 8 reps = 480 kg.</li>
+                <li>Sets with no weight (bodyweight, planks, timed work) add 0 kg but still count as sets.</li>
+                <li>The week runs Monday to Sunday. The % compares with last week.</li>
+              </ul>
+            </details>
             <dl className="mt-5 grid grid-cols-2 gap-3 border-t-2 border-accent-ink/25 pt-4">
               <div>
                 <dt className="tag opacity-75">Sessions</dt>
@@ -106,7 +115,7 @@ export default function ProgressPage() {
 
           <ChartCard
             title="Weekly volume"
-            subtitle="Total load × reps per week"
+            subtitle="Total kg lifted each week (weight × reps, all sets)"
             columns={["Week of", "Sessions", "Sets", "Volume (kg)"]}
             rows={[...(weeks ?? [])].reverse().map((w) => [formatShortDate(w.week_start), String(w.sessions), String(w.sets), formatCompact(Math.round(w.volume))])}
           >
