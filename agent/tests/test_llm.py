@@ -12,7 +12,7 @@ def test_model_is_built_for_openrouter_with_the_configured_id():
     m = build_model(settings(model="google/gemini-test", max_output_tokens=321), streaming=True)
     assert m.model_name == "google/gemini-test"
     assert str(m.openai_api_base) == "https://openrouter.ai/api/v1"
-    assert m.max_tokens == 321 and m.streaming and m.stream_usage
+    assert m.max_tokens == 321 and m.streaming and m.stream_usage and m.max_retries == 5
     assert m.extra_body == {"reasoning": {"effort": "low"}}  # safe on models that cannot switch reasoning off
 
 

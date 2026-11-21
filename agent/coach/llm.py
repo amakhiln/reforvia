@@ -27,6 +27,7 @@ def build_model(settings: Settings, streaming: bool) -> BaseChatModel:
         base_url=settings.openrouter_url,
         max_tokens=settings.max_output_tokens,
         streaming=streaming,
+        max_retries=5,  # short rate-limit or network spells are retried with growing waits
         stream_usage=True,  # token counts for the daily usage record arrive on the last streamed chunk
         use_responses_api=False,  # OpenRouter's stable surface is Chat Completions
         default_headers={"X-Title": "Reforvia"},
