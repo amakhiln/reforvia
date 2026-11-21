@@ -13,7 +13,7 @@ def test_model_is_built_for_openrouter_with_the_configured_id():
     assert m.model_name == "google/gemini-test"
     assert str(m.openai_api_base) == "https://openrouter.ai/api/v1"
     assert m.max_tokens == 321 and m.streaming and m.stream_usage
-    assert m.extra_body is None  # provider routing is opt-in
+    assert m.extra_body == {"reasoning": {"effort": "low"}}  # safe on models that cannot switch reasoning off
 
 
 def test_base_url_and_model_can_be_overridden():
@@ -22,7 +22,17 @@ def test_base_url_and_model_can_be_overridden():
 
 
 def test_provider_routing_can_be_turned_on():
-    assert build_model(settings(provider_sort="latency"), streaming=True).extra_body == {"provider": {"sort": "latency"}}
+    m = build_model(settings(provider_sort="latency"), streaming=True)
+    assert m.extra_body == {"provider": {"sort": "latency"}, "reasoning": {"effort": "low"}}
+
+
+def test_reasoning_can_be_switched_off_or_left_to_the_model():
+    assert build_model(settings(reasoning="none"), streaming=True).extra_body == {"reasoning": {"effort": "none"}}
+    assert build_model(settings(reasoning="default"), streaming=True).extra_body is None
+
+
+def test_output_limit_leaves_room_after_reasoning():
+    assert Settings(supabase_url="https://x", supabase_key="p").max_output_tokens >= 4096
 
 
 def test_missing_key_is_refused_before_any_request():

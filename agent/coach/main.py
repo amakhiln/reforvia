@@ -212,8 +212,9 @@ def create_app(
             if not answer:
                 # Say what happened instead of saving a vague reply into the history.
                 log.warning(
-                    "empty reply: model=%s finish_reason=%s tools=%d tokens in/out %d/%d",
-                    settings.model, finish, len(announced), tokens_in, tokens_out,
+                    "empty reply: model=%s finish_reason=%s tools=%d tokens in/out %d/%d reasoning=%s max_tokens=%d "
+                    "(finish_reason=length means hidden reasoning used the whole output limit: lower COACH_REASONING or raise COACH_MAX_OUTPUT_TOKENS)",
+                    settings.model, finish, len(announced), tokens_in, tokens_out, settings.reasoning, settings.max_output_tokens,
                 )
                 yield _sse({"type": "error", "message": f"The coach didn't produce an answer (reason: {finish or 'unknown'}). Please try again."})
                 return

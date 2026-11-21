@@ -23,9 +23,13 @@ class Settings:
     openrouter_key: str = field(default_factory=lambda: os.environ.get("OPENROUTER_API_KEY", ""))
     openrouter_url: str = field(default_factory=lambda: os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/"))
     # Optional OpenRouter provider routing: "latency" prefers the provider that starts answering fastest. Off unless set.
+    # Reasoning effort sent to OpenRouter: none | minimal | low | medium | high | default ("default" sends nothing).
+    # Hidden reasoning counts against the output limit, and some models (Claude Sonnet 5.5) always reason, so the safe
+    # default is "low". Models that can switch reasoning off (Claude Haiku 5.5) answer fastest with COACH_REASONING=none.
+    reasoning: str = field(default_factory=lambda: os.environ.get("COACH_REASONING", "low").strip().lower())
     provider_sort: str = field(default_factory=lambda: os.environ.get("OPENROUTER_PROVIDER_SORT", ""))
     model: str = field(default_factory=lambda: os.environ.get("COACH_MODEL", "anthropic/claude-sonnet-5.5"))
-    max_output_tokens: int = field(default_factory=lambda: _int("COACH_MAX_OUTPUT_TOKENS", 1024))
+    max_output_tokens: int = field(default_factory=lambda: _int("COACH_MAX_OUTPUT_TOKENS", 4096))
     daily_message_limit: int = field(default_factory=lambda: _int("DAILY_MESSAGE_LIMIT", 30))
     history_messages: int = field(default_factory=lambda: _int("COACH_HISTORY_MESSAGES", 20))
     allowed_origins: tuple[str, ...] = field(

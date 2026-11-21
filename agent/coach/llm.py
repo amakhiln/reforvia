@@ -7,6 +7,15 @@ from langchain_core.language_models import BaseChatModel
 from .config import Settings
 
 
+def _extra_body(settings: Settings) -> dict:
+    body: dict = {}
+    if settings.provider_sort:
+        body["provider"] = {"sort": settings.provider_sort}
+    if settings.reasoning not in ("", "default"):
+        body["reasoning"] = {"effort": settings.reasoning}
+    return body
+
+
 def build_model(settings: Settings, streaming: bool) -> BaseChatModel:
     if not settings.openrouter_key:
         raise RuntimeError("OPENROUTER_API_KEY is not set")
@@ -21,5 +30,5 @@ def build_model(settings: Settings, streaming: bool) -> BaseChatModel:
         stream_usage=True,  # token counts for the daily usage record arrive on the last streamed chunk
         use_responses_api=False,  # OpenRouter's stable surface is Chat Completions
         default_headers={"X-Title": "Reforvia"},
-        extra_body={"provider": {"sort": settings.provider_sort}} if settings.provider_sort else None,
+        extra_body=_extra_body(settings) or None,
     )
