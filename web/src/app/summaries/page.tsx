@@ -4,10 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "@yusufceng1z/ding-react";
 import { AppShell, ErrorNotice, InlineSpinner, Spinner } from "@/components/AppShell";
 import { RichText } from "@/components/RichText";
+import { WeekReview } from "@/components/WeekReview";
 import { BellIcon } from "@/components/icons";
 import { COACH_URL, CoachHttpError, generateSummary } from "@/lib/coach";
 import { formatShortDate } from "@/lib/dates";
-import { formatCompact } from "@/lib/chartMath";
 import { disablePush, enablePush, pushState, type PushState } from "@/lib/push";
 import { getSupabase } from "@/lib/supabase/client";
 import type { WeeklySummary } from "@/lib/types";
@@ -27,8 +27,6 @@ function split(content: string): { headline: string; body: string } {
 function Summary({ s, open }: { s: WeeklySummary; open?: boolean }) {
   const { headline, body } = split(s.content);
   const st = s.stats ?? {};
-  const delta =
-    st.prev_volume_kg && st.volume_kg !== undefined ? Math.round(((st.volume_kg - st.prev_volume_kg) / st.prev_volume_kg) * 100) : null;
   return (
     <details open={open} className="group rounded-2xl bg-surface">
       <summary className="flex cursor-pointer list-none items-start justify-between gap-3 p-4">
@@ -40,23 +38,7 @@ function Summary({ s, open }: { s: WeeklySummary; open?: boolean }) {
       </summary>
       <div className="space-y-4 border-t border-line p-4 text-[15px]">
         {body && <RichText text={body} />}
-        <dl className="grid grid-cols-3 gap-2 text-center">
-          <div className="rounded-xl bg-surface-2 px-2 py-2.5">
-            <dd className="font-mono text-xl font-semibold tabular-nums">
-              {st.sessions ?? 0}
-              {st.planned_sessions ? <span className="text-sm font-normal text-muted">/{st.planned_sessions}</span> : null}
-            </dd>
-            <dt className="tag mt-1 text-muted">Sessions</dt>
-          </div>
-          <div className="rounded-xl bg-surface-2 px-2 py-2.5">
-            <dd className="font-mono text-xl font-semibold tabular-nums">{formatCompact(st.volume_kg ?? 0)}</dd>
-            <dt className="tag mt-1 text-muted">Volume (kg)</dt>
-          </div>
-          <div className="rounded-xl bg-surface-2 px-2 py-2.5">
-            <dd className="font-mono text-xl font-semibold tabular-nums">{delta === null ? "–" : `${delta > 0 ? "+" : ""}${delta}%`}</dd>
-            <dt className="tag mt-1 text-muted">vs prior week</dt>
-          </div>
-        </dl>
+        <WeekReview st={st} />
       </div>
     </details>
   );
