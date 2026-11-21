@@ -4,13 +4,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "@yusufceng1z/ding-react";
 import { AppShell, ErrorNotice, Spinner } from "@/components/AppShell";
+import { PlusIcon } from "@/components/icons";
 import { ExerciseCard } from "@/components/ExerciseCard";
+import { ExercisePicker, type Found } from "@/components/ExercisePicker";
 import { RestTimer } from "@/components/RestTimer";
 import type { SetValues } from "@/components/SetRow";
 import { formatLongDate } from "@/lib/dates";
+import { defaultRep } from "@/lib/repTarget";
 import { defaultRestSeconds } from "@/lib/progression";
 import { getSupabase } from "@/lib/supabase/client";
-import { fetchBundle, takeBundle } from "@/lib/workoutBundle";
+import { fetchBundle, takeBundle, type WorkoutBundle } from "@/lib/workoutBundle";
 import type { PreviousSet, SetLog, Workout, WorkoutExercise } from "@/lib/types";
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : ((e as { message?: string })?.message ?? "Unknown error"));
@@ -22,32 +25,35 @@ export function WorkoutClient() {
   const [items, setItems] = useState<WorkoutExercise[] | null>(null);
   const [previous, setPrevious] = useState<Record<string, PreviousSet[]>>({});
   const [openId, setOpenId] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [alsoPlan, setAlsoPlan] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rest, setRest] = useState<{ endsAt: number; total: number } | null>(null);
   const userId = useRef<string | null>(null);
+
+  const apply = useCallback((bundle: WorkoutBundle) => {
+    const rows = bundle.items.map((r) => ({
+      ...r,
+      set_logs: [...(r.set_logs ?? [])].sort((a, b) => a.set_number - b.set_number),
+    }));
+    const grouped: Record<string, PreviousSet[]> = {};
+    for (const p of bundle.previous) (grouped[p.exercise_id] ??= []).push(p);
+    setWorkout(bundle.workout);
+    setItems(rows);
+    setPrevious(grouped);
+    setOpenId((cur) => cur ?? rows.find((r) => !r.completed)?.id ?? null);
+  }, []);
 
   const load = useCallback(async () => {
     try {
       const sb = getSupabase();
       const { data: auth } = await sb.auth.getSession();
       userId.current = auth.session?.user.id ?? null;
-
-      const bundle = takeBundle(id) ?? (await fetchBundle(id));
-      const rows = bundle.items.map((r) => ({
-        ...r,
-        set_logs: [...(r.set_logs ?? [])].sort((a, b) => a.set_number - b.set_number),
-      }));
-      const grouped: Record<string, PreviousSet[]> = {};
-      for (const p of bundle.previous) (grouped[p.exercise_id] ??= []).push(p);
-
-      setWorkout(bundle.workout);
-      setItems(rows);
-      setPrevious(grouped);
-      setOpenId((cur) => cur ?? rows.find((r) => !r.completed)?.id ?? null);
+      apply(takeBundle(id) ?? (await fetchBundle(id)));
     } catch (e) {
       setError(msg(e));
     }
-  }, [id]);
+  }, [id, apply]);
 
   const retry = useCallback(() => {
     setError(null);
@@ -206,6 +212,64 @@ export function WorkoutClient() {
     else setWorkout((w) => (w ? { ...w, finished_at: null } : w));
   }
 
+  async function addExercise(ex: Found, alsoPlan: boolean) {
+    if (!userId.current || !workout || !items) return;
+    if (items.some((i) => i.exercise_id === ex.id)) {
+      toast.info("That exercise is already in this workout.");
+      return;
+    }
+    try {
+      const sb = getSupabase();
+      const { data: we, error } = await sb
+        .from("workout_exercises")
+        .insert({
+          workout_id: id,
+          user_id: userId.current,
+          exercise_id: ex.id,
+          sort_order: items.reduce((m, i) => Math.max(m, i.sort_order), -1) + 1,
+        })
+        .select("id")
+        .single();
+      if (error) throw error;
+
+      let note = `${ex.name} added`;
+      if (alsoPlan && workout.session_id) {
+        // Best effort: the exercise is already in today's workout even if the plan update fails.
+        const { data: last } = await sb
+          .from("planned_exercises")
+          .select("sort_order")
+          .eq("session_id", workout.session_id)
+          .order("sort_order", { ascending: false })
+          .limit(1);
+        const { data: pe, error: pErr } = await sb
+          .from("planned_exercises")
+          .insert({
+            session_id: workout.session_id,
+            user_id: userId.current,
+            exercise_id: ex.id,
+            sort_order: (last?.[0]?.sort_order ?? -1) + 1,
+            planned_sets: 3,
+            per_side: false,
+            is_timed: ex.is_timed,
+            ...defaultRep(ex.is_timed),
+          })
+          .select("id")
+          .single();
+        if (pErr || !pe) note += ", but it couldn’t be added to your plan";
+        else {
+          await sb.from("workout_exercises").update({ planned_exercise_id: pe.id }).eq("id", we.id);
+          note += " and added to your plan";
+        }
+      }
+      apply(await fetchBundle(id));
+      setOpenId(we.id);
+      setAdding(false);
+      flash(note, "success");
+    } catch (e) {
+      flash(`Couldn’t add exercise: ${msg(e)}`);
+    }
+  }
+
   const summary = useMemo(() => {
     const all = items ?? [];
     return {
@@ -257,6 +321,22 @@ export function WorkoutClient() {
               onNotes={saveNotes(item)}
             />
           ))}
+
+          {adding ? (
+            <div className="space-y-2 rounded-2xl bg-surface p-3">
+              <ExercisePicker onPick={(ex) => addExercise(ex, alsoPlan)} onCancel={() => setAdding(false)} />
+              {workout.session_id && (
+                <label className="flex items-center gap-2 px-1 text-sm">
+                  <input type="checkbox" checked={alsoPlan} onChange={(e) => setAlsoPlan(e.target.checked)} className="size-4 accent-[var(--accent)]" />
+                  Also add it to my plan
+                </label>
+              )}
+            </div>
+          ) : (
+            <button onClick={() => setAdding(true)} className="tag flex h-12 w-full items-center justify-center gap-2 rounded-xl border-2 border-line">
+              <PlusIcon className="size-4 text-accent" /> Add exercise
+            </button>
+          )}
 
           <button
             onClick={() => setFinished(!workout.finished_at)}
