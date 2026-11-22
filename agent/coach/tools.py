@@ -12,6 +12,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
 from .memory import KINDS, resolve
+from .nutrition import targets as nutrition_targets
 from .planchange import PlanChange, build_plan_change
 from .progression import suggest_next
 from .proposals import create_proposal
@@ -260,6 +261,46 @@ async def propose_plan_change(changes: list[PlanChange], config: RunnableConfig 
     return _json({"proposal": card, "message": "Shown to the user as a card. The plan is NOT changed until they tap Approve, so tell them it is waiting for their approval."})
 
 
+FOOD_FIELDS = "id,code,name,food_group,energy_kcal,energy_derived,protein_g,fat_g,carbs_g,fibre_g,sugars_g,sat_fat_g,calcium_mg,iron_mg,sodium_mg,potassium_mg,vitamin_c_mg"
+
+
+@tool
+async def get_nutrition_targets(config: RunnableConfig = None) -> str:  # type: ignore[assignment]
+    """The user's daily calorie and macro targets, worked out by code from their profile and logged training, with the method. Returns no targets (and says why) if the profile is missing, they said a health condition applies, or they are under 18."""
+    sb = _sb(config)
+    profile = await sb.select("nutrition_profile", {"select": "birth_year,sex,height_cm,weight_kg,goal,diet,see_professional", "limit": "1"})
+    weekly = await sb.rpc("weekly_summary", {"p_weeks": 5, "p_today": _today(config).isoformat()}) or []
+    out = nutrition_targets(profile[0] if profile else None, [{"sessions": w["sessions"]} for w in weekly], _today(config))
+    if profile and out.get("ok"):
+        out["diet"] = profile[0]["diet"]
+    return _json(out)
+
+
+@tool
+async def search_foods(query: str, limit: int = 5, config: RunnableConfig = None) -> str:  # type: ignore[assignment]
+    """Find foods in the Indian Food Composition Tables by English, regional or scientific name (e.g. 'atta', 'chana', 'egg'). Returns values per 100 g of the food as listed. The tables hold raw ingredients, not cooked dishes."""
+    rows = await _sb(config).rpc("search_foods", {"q": (query or "")[:60], "lim": max(1, min(int(limit), 8))}) or []
+    foods = [{k: r[k] for k in FOOD_FIELDS.split(",")} for r in rows]
+    if not foods:
+        return _json({"foods": [], "message": "No match. Try another name, or a simpler one. Cooked dishes are not in the tables: use their raw ingredients."})
+    return _json({"per": "100 g of the food as listed", "foods": foods})
+
+
+@tool
+async def portion_nutrition(code: str, grams: float, config: RunnableConfig = None) -> str:  # type: ignore[assignment]
+    """Exact nutrition for an amount of one food, scaled by code from the per-100 g values. code is the food code returned by search_foods (e.g. 'A019'). grams is 1 to 2000. Use this instead of doing the arithmetic yourself."""
+    g = float(grams)
+    if not 1 <= g <= 2000:
+        return _json({"error": "grams must be between 1 and 2000."})
+    rows = await _sb(config).select("foods", {"select": FOOD_FIELDS, "source": "eq.ifct2017", "code": f"eq.{re.sub(r'[^A-Za-z0-9]', '', code)[:8]}", "limit": "1"})
+    if not rows:
+        return _json({"error": f"No food with code '{code}'. Use search_foods to find the code."})
+    f = rows[0]
+    scale = g / 100
+    keys = ["energy_kcal", "protein_g", "fat_g", "carbs_g", "fibre_g", "sugars_g", "sat_fat_g", "calcium_mg", "iron_mg", "sodium_mg", "potassium_mg", "vitamin_c_mg"]
+    return _json({"food": f["name"], "code": f["code"], "grams": g, "energy_derived": f["energy_derived"], **{k: round(float(f[k]) * scale, 1) for k in keys}})
+
+
 TOOLS = [propose_plan_change, propose_memory, get_my_plan, get_recent_workouts, find_exercise, get_exercise_guide, get_exercise_progress, get_weekly_volume, get_personal_bests]
 
 TOOL_LABELS = {
@@ -272,4 +313,7 @@ TOOL_LABELS = {
     "get_personal_bests": "Checking your personal bests",
     "propose_memory": "Preparing a note to save",
     "propose_plan_change": "Preparing a plan change",
+    "get_nutrition_targets": "Working out your targets",
+    "search_foods": "Searching foods",
+    "portion_nutrition": "Calculating the portion",
 }

@@ -23,10 +23,10 @@ from pathlib import Path
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from coach.config import Settings
+from coach.agents import AGENTS
 from coach.graph import build_graph
 from coach.memory import load_memories
 from coach.llm import build_model
-from coach.prompts import build_system_prompt
 
 from .cases import CASES, Case, Ctx
 from .fixture import make_supabase
@@ -68,7 +68,7 @@ def load_prices() -> dict[str, tuple[float, float]]:
 
 
 def score(case: Case, answer: str, tool_calls: list[str], tool_results: dict[str, str], tool_texts: list[str]) -> list[dict]:
-    tool_texts = tool_texts + [build_system_prompt(datetime.now().date(), "UTC")]  # numbers the Coach is told in its own instructions
+    tool_texts = tool_texts + [AGENTS[case.agent].prompt(datetime.now().date(), "UTC", "")]  # numbers the agent is told in its own instructions
     ctx = Ctx(case.question, answer.replace("’", "'").replace("‘", "'"), tool_calls, tool_results, tool_texts)
     out = []
     for chk in case.checks:
@@ -81,8 +81,8 @@ def score(case: Case, answer: str, tool_calls: list[str], tool_results: dict[str
 
 
 async def run_case(settings: Settings, case: Case, model=None) -> dict:
-    sb, _ = make_supabase()
-    graph = build_graph(model or build_model(settings, streaming=True))  # `model` lets tests inject a scripted one
+    sb, _ = make_supabase(profile=case.profile)
+    graph = build_graph(model or build_model(settings, streaming=True), AGENTS[case.agent])  # `model` lets tests inject a scripted one
     cfg = {"configurable": {"sb": sb, "tz": "Asia/Kolkata", "user_id": "eval-user", "memories": await load_memories(sb)}, "recursion_limit": 14}
     t0, first, tin, tout, state, error = time.perf_counter(), None, 0, 0, None, None
     try:

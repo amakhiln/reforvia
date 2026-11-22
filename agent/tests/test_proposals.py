@@ -93,14 +93,16 @@ def test_proposal_for_reads_only_complete_proposals():
 async def test_a_tool_that_stores_a_proposal_reaches_the_stream_as_a_proposal_event(monkeypatch):
     from langchain_core.tools import tool
 
-    from coach import graph as graph_module
+    from dataclasses import replace
+
+    from coach import agents
 
     @tool
     async def propose_thing() -> str:
         """Pretend tool that stored a proposal."""
         return json.dumps({"proposal": {"id": PID, "kind": "memory", "summary": "Remember it", "preview": ["+ a note"], "expires_at": "2026-11-22T10:30:00Z"}})
 
-    monkeypatch.setattr(graph_module, "TOOLS", [propose_thing])
+    monkeypatch.setitem(agents.AGENTS, "coach", replace(agents.COACH, tools=[propose_thing]))
     fake = FakeSupabase({"coach_messages": [], "rpc/agent_register_message": [{"allowed": True, "used": 1}], "rpc/agent_add_tokens": None})
     app = create_app(SETTINGS, model=ScriptedModel(script=[("tool", "propose_thing", {}), "I have suggested that. Approve it on the card."]), http=fake.client())
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://coach") as c:

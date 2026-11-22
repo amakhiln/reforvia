@@ -38,6 +38,12 @@ def card_for(tool: str, result: str) -> dict[str, Any] | None:
             if len(points) > 1
             else None
         )
+    if tool == "get_nutrition_targets" and data.get("ok"):
+        keys = ("calories", "protein_g", "fat_g", "carbs_g", "goal", "expected_change_kg_per_week")
+        return {"kind": "targets", **{k: data[k] for k in keys}, "maintenance_kcal": data["method"]["maintenance_kcal"], "floor_applied": data["floor_applied"]}
+    if tool == "portion_nutrition" and "food" in data:
+        keys = ("food", "grams", "energy_kcal", "protein_g", "fat_g", "carbs_g", "fibre_g", "energy_derived")
+        return {"kind": "food", **{k: data[k] for k in keys}}
     if tool == "get_personal_bests":
         rows = data.get("bests", [])[:6]
         return {"kind": "bests", "rows": rows} if rows else None

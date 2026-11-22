@@ -92,7 +92,9 @@ Remove and reorder exercises, new sessions or days, plan reset by the Coach, cus
 - Phase 1 adds a small cost to every reply: measure it and keep the off switch.
 - A cheap model may write weak chips: the evals decide the default model.
 
-## Next: a Nutrition agent (planned, data loaded first)
+## The Nutrition agent (v1 built on branch `nutrition-agent`)
+
+*Built: migration 0022 (profile and a chat history per agent), `coach/nutrition.py` (deterministic targets), tools `get_nutrition_targets`, `search_foods`, `portion_nutrition`, the `/nutrition` chat and `/nutrition/profile` screens, target and food cards, and 13 safety and grounding eval cases. Not built: food logging, a nutrition line in the weekly review, the supervisor router. Original plan below.*
 
 A third agent for food and targets, with its own prompt, tools and tab. Numbers come from code and data, never from the model.
 

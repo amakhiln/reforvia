@@ -54,6 +54,60 @@ export function CoachCardView({ card }: { card: CoachCard }) {
     );
   }
 
+  if (card.kind === "targets") {
+    const goal = { lose: "Fat loss", maintain: "Maintenance", gain: "Muscle gain" }[card.goal];
+    const change = card.expected_change_kg_per_week;
+    return (
+      <section className="rounded-2xl border border-line bg-surface p-4" aria-label="Daily targets">
+        <h2 className="tag text-ink">Daily targets · {goal}</h2>
+        <p className="mt-3 font-mono text-4xl font-semibold tabular-nums leading-none">
+          {card.calories.toLocaleString()} <span className="text-base font-normal text-muted">kcal</span>
+        </p>
+        <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
+          {[
+            ["Protein", card.protein_g],
+            ["Carbs", card.carbs_g],
+            ["Fat", card.fat_g],
+          ].map(([label, g]) => (
+            <div key={label} className="rounded-xl bg-surface-2 px-2 py-2.5">
+              <dd className="font-mono text-xl font-semibold tabular-nums">{g}<span className="text-sm font-normal text-muted"> g</span></dd>
+              <dt className="tag mt-1 text-muted">{label}</dt>
+            </div>
+          ))}
+        </dl>
+        <p className="mt-3 text-xs text-muted">
+          An estimate. Your maintenance is about {card.maintenance_kcal.toLocaleString()} kcal
+          {change !== 0 ? `, so this changes weight by about ${Math.abs(change)} kg a week` : ""}.
+          {card.floor_applied ? " A safe minimum applied, so the change is slower." : ""}
+        </p>
+      </section>
+    );
+  }
+
+  if (card.kind === "food") {
+    return (
+      <section className="rounded-2xl border border-line bg-surface p-4" aria-label="Food values">
+        <h2 className="tag text-ink">{card.food} · {card.grams} g</h2>
+        <dl className="mt-3 grid grid-cols-4 gap-2 text-center">
+          {[
+            ["kcal", card.energy_kcal],
+            ["Protein", card.protein_g],
+            ["Carbs", card.carbs_g],
+            ["Fat", card.fat_g],
+          ].map(([label, v]) => (
+            <div key={label} className="rounded-xl bg-surface-2 px-1 py-2.5">
+              <dd className="font-mono text-lg font-semibold tabular-nums">{v}</dd>
+              <dt className="tag mt-1 text-muted">{label}</dt>
+            </div>
+          ))}
+        </dl>
+        <p className="mt-3 text-xs text-muted">
+          Raw, as listed in the Indian Food Composition Tables 2017.{card.energy_derived ? " Energy worked out from the macros." : ""}
+        </p>
+      </section>
+    );
+  }
+
   return (
     <section className="rounded-2xl border border-line bg-surface p-4" aria-label="Personal bests">
       <h2 className="tag text-ink">Personal bests</h2>

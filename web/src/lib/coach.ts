@@ -6,7 +6,9 @@ export const COACH_URL = (process.env.NEXT_PUBLIC_COACH_URL ?? "").replace(/\/$/
 export type CoachCard =
   | { kind: "volume"; weeks: { week_of: string; sessions: number; sets: number; volume_kg: number }[] }
   | { kind: "progress"; exercise: string; points: { date: string; est_1rm_kg: number; top_set: string }[]; next_load_kg: number | null }
-  | { kind: "bests"; rows: { exercise: string; set: string; est_1rm_kg: number | null; date: string }[] };
+  | { kind: "bests"; rows: { exercise: string; set: string; est_1rm_kg: number | null; date: string }[] }
+  | { kind: "targets"; calories: number; protein_g: number; fat_g: number; carbs_g: number; goal: "lose" | "maintain" | "gain"; expected_change_kg_per_week: number; maintenance_kcal: number; floor_applied: boolean }
+  | { kind: "food"; food: string; grams: number; energy_kcal: number; protein_g: number; fat_g: number; carbs_g: number; fibre_g: number; energy_derived: boolean };
 
 export type ProposalStatus = "pending" | "applied" | "rejected" | "expired" | "failed";
 
@@ -40,6 +42,9 @@ const TOOL_LABELS: Record<string, string> = {
   get_personal_bests: "Checking your personal bests",
   propose_memory: "Preparing a note to save",
   propose_plan_change: "Preparing a plan change",
+  get_nutrition_targets: "Working out your targets",
+  search_foods: "Searching foods",
+  portion_nutrition: "Calculating the portion",
 };
 
 /** The server speaks AG-UI (docs.ag-ui.com). This keeps the page on a small set of events it cares about. */
@@ -86,7 +91,7 @@ export async function pingCoach(signal?: AbortSignal): Promise<boolean> {
 }
 
 /** Sends a message and yields server-sent events as they arrive. */
-export async function* streamCoach(message: string, signal?: AbortSignal): AsyncGenerator<CoachEvent> {
+export async function* streamCoach(message: string, signal?: AbortSignal, agent: "coach" | "nutrition" = "coach"): AsyncGenerator<CoachEvent> {
   const { data } = await getSupabase().auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new CoachHttpError("You’re signed out. Please sign in again.", 401);
@@ -94,7 +99,7 @@ export async function* streamCoach(message: string, signal?: AbortSignal): Async
   const res = await fetch(`${COACH_URL}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ message, tz: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+    body: JSON.stringify({ message, agent, tz: Intl.DateTimeFormat().resolvedOptions().timeZone }),
     signal,
   });
 

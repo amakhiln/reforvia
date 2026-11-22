@@ -8,7 +8,7 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 from datetime import date, datetime
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -23,6 +23,7 @@ from langgraph.errors import GraphRecursionError
 from pydantic import BaseModel, Field
 
 from .analyst import PushSend, build_analyst_graph, last_completed_week, make_web_push, run_weekly, service_client, summarise_user
+from .agents import AGENTS, AgentSpec
 from .auth import AuthError, authenticate
 from .cards import card_for, proposal_for
 from .proposals import decide
@@ -42,6 +43,7 @@ log = logging.getLogger("coach")
 
 class ChatIn(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
+    agent: Literal["coach", "nutrition"] = "coach"
     tz: str | None = Field(default=None, max_length=64)
 
 
@@ -74,7 +76,7 @@ def create_app(
 ) -> FastAPI:
     settings = settings or Settings()
     limiter = SlidingWindow(settings.rate_per_minute)
-    state: dict[str, Any] = {"tasks": set(), "http": http, "graph": None, "analyst": None, "push": push, "push_built": push is not None}
+    state: dict[str, Any] = {"tasks": set(), "http": http, "graphs": {}, "analyst": None, "push": push, "push_built": push is not None}
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -118,10 +120,10 @@ def create_app(
                 state["small"] = None
         return state["small"]
 
-    def get_graph():
-        if state["graph"] is None:
-            state["graph"] = build_graph(get_llm(streaming=True))
-        return state["graph"]
+    def get_graph(spec: AgentSpec):
+        if spec.name not in state["graphs"]:
+            state["graphs"][spec.name] = build_graph(get_llm(streaming=True), spec)
+        return state["graphs"][spec.name]
 
     def get_analyst():
         if state["analyst"] is None:
@@ -161,7 +163,8 @@ def create_app(
         # Do everything that can fail cheaply before the message is counted against the daily cap,
         # so a misconfigured model or a database hiccup never costs the user a message.
         try:
-            graph = get_graph()
+            spec = AGENTS[body.agent]
+            graph = get_graph(spec)
         except Exception:
             log.exception("could not build the model")
             return JSONResponse({"error": "The coach model isn't configured (is OPENROUTER_API_KEY set?)."}, status_code=503)
@@ -171,7 +174,8 @@ def create_app(
 
         try:
             rows = await sb.select(
-                "coach_messages", {"select": "role,content", "order": "created_at.desc", "limit": str(settings.history_messages)}
+                "coach_messages",
+                {"select": "role,content", "agent": f"eq.{spec.name}", "order": "created_at.desc", "limit": str(settings.history_messages)},
             )
             reg = await sb.rpc("agent_register_message", {"p_day": today.isoformat(), "p_limit": settings.daily_message_limit})
             row = reg[0] if isinstance(reg, list) and reg else reg
@@ -186,7 +190,7 @@ def create_app(
 
         # Saving the question runs alongside the model call instead of in front of it; it is awaited before the reply is saved.
         save_question = asyncio.create_task(
-            sb.insert("coach_messages", {"user_id": user_id, "role": "user", "content": body.message})
+            sb.insert("coach_messages", {"user_id": user_id, "agent": spec.name, "role": "user", "content": body.message})
         )
 
         async def question_saved() -> None:
@@ -203,7 +207,7 @@ def create_app(
         messages = [*history, HumanMessage(content=body.message)]
 
         memories = await load_memories(sb)  # the user's notes; empty if the database hiccups, never a failed chat
-        earlier = await load_summary(sb)  # what scrolled out of the window; empty if none or the database hiccups
+        earlier = await load_summary(sb) if spec.summary else ""  # what scrolled out of the window; empty if none or the database hiccups
         cfg = {"configurable": {"sb": sb, "tz": tz, "user_id": user_id, "memories": memories, "summary": earlier}, "recursion_limit": 14}
 
         async def stream() -> AsyncIterator[str]:
@@ -288,7 +292,7 @@ def create_app(
             suggest_llm = get_small_llm() if settings.suggestions else None
             # Chips are written while the reply is saved, so they add little waiting.
             chips_task = (
-                asyncio.create_task(asyncio.wait_for(suggest(suggest_llm, body.message, answer, tools_used), timeout=6))
+                asyncio.create_task(asyncio.wait_for(suggest(suggest_llm, body.message, answer, tools_used, spec.chip_scope), timeout=6))
                 if suggest_llm is not None
                 else None
             )
@@ -300,12 +304,12 @@ def create_app(
             check = asyncio.create_task(asyncio.to_thread(ungrounded, answer, sources, body.message))
             await question_saved()  # the question is stored before the reply
             try:
-                await sb.insert("coach_messages", {"user_id": user_id, "role": "assistant", "content": answer})
+                await sb.insert("coach_messages", {"user_id": user_id, "agent": spec.name, "role": "assistant", "content": answer})
                 if tokens_in or tokens_out:
                     await sb.rpc("agent_add_tokens", {"p_day": today.isoformat(), "p_input": tokens_in, "p_output": tokens_out})
             except SupabaseError as exc:
                 log.warning("could not save coach reply: %s", exc)
-            if settings.chat_summary and (small := get_small_llm()) is not None:
+            if spec.summary and settings.chat_summary and (small := get_small_llm()) is not None:
                 # Runs after the reply is saved and never delays it; the next chat reads whatever it wrote.
                 task = asyncio.create_task(update_summary(sb, user_id, small, settings.history_messages))
                 state["tasks"].add(task)
