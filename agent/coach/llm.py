@@ -33,3 +33,10 @@ def build_model(settings: Settings, streaming: bool) -> BaseChatModel:
         default_headers={"X-Title": "Reforvia"},
         extra_body=_extra_body(settings) or None,
     )
+
+
+def build_suggest_model(settings: Settings) -> BaseChatModel:
+    """The small model that writes next-step chips: no hidden reasoning, a short output."""
+    from dataclasses import replace
+
+    return build_model(replace(settings, model=settings.suggest_model, reasoning="none", max_output_tokens=200), streaming=False)

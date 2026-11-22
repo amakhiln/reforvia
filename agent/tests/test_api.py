@@ -220,3 +220,39 @@ async def test_volume_tool_result_is_also_sent_as_a_chart_card():
     events = parse((await post(app, {"message": "volume?"})).text)
     (card,) = [e for e in events if e["type"] == "CUSTOM" and e["name"] == "card"]
     assert card["value"]["kind"] == "volume" and [w["volume_kg"] for w in card["value"]["weeks"]] == [4000, 5400]
+
+
+def build_with_chips(chip_script, answer_script=("Today is your pull day.",)):
+    fake = FakeSupabase({"program_sessions": PLAN, "coach_messages": [], "rpc/agent_register_message": [{"allowed": True, "used": 1}],
+                         "rpc/agent_add_tokens": None})
+    app = create_app(settings=SETTINGS, model=ScriptedModel(script=list(answer_script)), http=fake.client(),
+                     suggest_model=ScriptedModel(script=chip_script))
+    return app, fake
+
+
+async def test_chips_are_sent_after_the_reply_and_before_the_stream_ends():
+    app, _ = build_with_chips(['["Show my weekly volume", "Review my last workout"]'])
+    types = [(e["type"], e.get("name")) for e in parse((await post(app, {"message": "What's my plan?"})).text)]
+    assert types[-3:] == [("TEXT_MESSAGE_END", None), ("CUSTOM", "suggestions"), ("RUN_FINISHED", None)]
+    app, _ = build_with_chips(['["Show my weekly volume", "Review my last workout"]'])
+    (chips,) = [e["value"] for e in parse((await post(app, {"message": "What's my plan?"})).text) if e.get("name") == "suggestions"]
+    assert chips == ["Show my weekly volume", "Review my last workout"]
+
+
+async def test_bad_chip_output_falls_back_and_never_breaks_the_reply():
+    app, _ = build_with_chips(["not json"])
+    events = parse((await post(app, {"message": "hi"})).text)
+    assert events[-1]["type"] == "RUN_FINISHED" and not [e for e in events if e.get("name") == "suggestions"]  # no tools used, no fallback
+
+
+async def test_a_failing_suggestion_model_does_not_touch_the_reply():
+    class Boom(ScriptedModel):
+        def _generate(self, *a, **k):
+            raise RuntimeError("down")
+
+    fake = FakeSupabase({"program_sessions": PLAN, "coach_messages": [], "rpc/agent_register_message": [{"allowed": True, "used": 1}],
+                         "rpc/agent_add_tokens": None})
+    app = create_app(settings=SETTINGS, model=ScriptedModel(script=["Fine."]), http=fake.client(), suggest_model=Boom(script=["x"]))
+    events = parse((await post(app, {"message": "hi"})).text)
+    assert "".join(e["delta"] for e in events if e["type"] == "TEXT_MESSAGE_CONTENT") == "Fine." and events[-1]["type"] == "RUN_FINISHED"
+    assert [t for t, r in fake.inserted if t == "coach_messages"] == ["coach_messages", "coach_messages"]
