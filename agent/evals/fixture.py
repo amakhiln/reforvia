@@ -81,6 +81,7 @@ def _e1rm(load: float, reps: int) -> float | None:
 
 class Fixture:
     def __init__(self, today: date | None = None):
+        self.stored: list[tuple[str, dict]] = []
         self.today = today or date.today()
         self.logs = build_logs(self.today)
         self.by_id = {v["id"]: k for k, v in EXERCISES.items()}
@@ -147,7 +148,13 @@ class Fixture:
             }[name]()
             return httpx.Response(200, json=data)
         table = path.rsplit("/", 1)[1]
+        if request.method == "POST":  # a proposal the Coach stored; nothing is applied in the eval
+            self.stored.append((table, json.loads(request.content)))
+            return httpx.Response(201)
         return httpx.Response(200, json=getattr(self, f"_t_{table}")(params))
+
+    def _t_agent_memories(self, _: dict) -> list[dict]:
+        return [dict(id="11111111-1111-4111-8111-111111111111", kind="fact", text="Trains 4 days a week, Monday to Thursday")]
 
     def _t_program_sessions(self, _: dict) -> list[dict]:
         return [dict(name=n, day_of_week=d, is_optional=False, sort_order=0,

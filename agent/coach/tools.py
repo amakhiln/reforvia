@@ -1,4 +1,5 @@
-"""Read-only tools the coach can call. Each one queries Supabase as the signed-in user, so RLS limits what is visible."""
+"""Tools the coach can call. Each one acts as the signed-in user, so RLS limits what is visible. All of them only read,
+except propose_memory, which stores a proposal the user must approve before anything is saved."""
 from __future__ import annotations
 
 import json
@@ -10,7 +11,9 @@ from zoneinfo import ZoneInfo
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
+from .memory import KINDS, resolve
 from .progression import suggest_next
+from .proposals import create_proposal
 from .supa import SupabaseError, UserSupabase
 
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
@@ -221,7 +224,31 @@ async def get_personal_bests(config: RunnableConfig = None) -> str:  # type: ign
     return _json({"bests": [{"exercise": r["name"], "set": f"{_num(r['load_kg']):g}kg x {r['reps']}", "est_1rm_kg": _num(r["e1rm"]), "date": r["performed_on"]} for r in rows]})
 
 
-TOOLS = [get_my_plan, get_recent_workouts, find_exercise, get_exercise_guide, get_exercise_progress, get_weekly_volume, get_personal_bests]
+@tool
+async def propose_memory(text: str, kind: str = "fact", replaces: str = "", config: RunnableConfig = None) -> str:  # type: ignore[assignment]
+    """Offer to save one lasting note about the user (an injury or limit, training days, equipment, a goal or preference). kind is fact, preference, constraint or goal. replaces is the label (M1, M2...) of an existing note this corrects. This only shows the user a Save button; nothing is saved until they approve it."""
+    cfg = config["configurable"]
+    note = " ".join((text or "").split())
+    if not 3 <= len(note) <= 200:
+        return _json({"error": "A note must be one short sentence (3 to 200 characters)."})
+    if kind not in KINDS:
+        return _json({"error": f"kind must be one of: {', '.join(KINDS)}."})
+    held = cfg.get("memories") or []
+    old = resolve(held, replaces) if replaces else None
+    if replaces and old is None:
+        return _json({"error": f"No note is labelled '{replaces}'. Use a label from the list, or leave replaces empty."})
+    if any(m["text"].strip().lower() == note.lower() for m in held):
+        return _json({"message": "That note is already saved. Do not offer it again."})
+    # shortcut: no cap on pending proposals here; the per-minute and daily message limits bound how many a user can cause
+    payload = {"text": note, "kind": kind, "supersedes_id": old["id"] if old else None}
+    preview = [f"+ {note}"] + ([f"- {old['text']}"] if old else [])
+    card = await create_proposal(
+        _sb(config), cfg["user_id"], "memory", payload, f"{'Update' if old else 'Remember'}: {note}", preview
+    )
+    return _json({"proposal": card, "message": "Shown to the user as a card. It is NOT saved until they tap Save, so tell them it is waiting for their approval."})
+
+
+TOOLS = [propose_memory, get_my_plan, get_recent_workouts, find_exercise, get_exercise_guide, get_exercise_progress, get_weekly_volume, get_personal_bests]
 
 TOOL_LABELS = {
     "get_my_plan": "Checking your plan",
@@ -231,4 +258,5 @@ TOOL_LABELS = {
     "get_exercise_progress": "Analysing your progress",
     "get_weekly_volume": "Checking your weekly volume",
     "get_personal_bests": "Checking your personal bests",
+    "propose_memory": "Preparing a note to save",
 }

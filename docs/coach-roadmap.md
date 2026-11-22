@@ -37,6 +37,8 @@ Keep it for running the agents (the tool loop, a supervisor later). Do **not** u
 
 ## Phase 3: memory and corrections (migration)
 
+*Built on branch `coach-memory`: migration 0017, `coach/memory.py`, the `propose_memory` tool, the notes screen at `/memory`, and the Analyst reading notes.*
+
 - Table `agent_memories`: kind (fact, preference, constraint, goal), text, source (you said it, or inferred), status (active, superseded, rejected), `supersedes_id`, source message. Row-level security.
 - A shared loader puts active memories (about 800 tokens max) into **both** the Coach and the Analyst prompt, labelled as notes from you, not instructions.
 - Tool `propose_memory` creates a memory proposal. A small chip asks "Remember: trains 5 days a week? Save / Not now". Saving takes one tap.
