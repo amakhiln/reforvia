@@ -1,34 +1,30 @@
-import { ChevronIcon } from "@/components/icons";
-
-/** Tappable next questions: an instrument-panel label above a short list of full-width keys.
- *  Used for the starter questions and for the follow-ups under a reply, so both read the same. */
+/** Quiet follow-up questions: small outlined chips in muted text that read as part of the chat, not as calls to action.
+ *  Used for the starter questions and for the follow-ups under a reply. */
 export function SuggestionChips({
   title,
   items,
   onPick,
   disabled = false,
+  showTitle = false,
 }: {
   title: string;
   items: string[];
   onPick: (text: string) => void;
   disabled?: boolean;
+  showTitle?: boolean;
 }) {
   return (
     <div role="group" aria-label={title}>
-      <p className="tag mb-2 flex items-center gap-2 text-muted">
-        <span className="h-px w-4 bg-accent" aria-hidden />
-        {title}
-      </p>
-      <ul className="flex flex-col gap-2">
-        {items.map((text, i) => (
-          <li key={text} className="rise" style={{ animationDelay: `${i * 60}ms` }}>
+      {showTitle && <p className="tag mb-2 text-muted">{title}</p>}
+      <ul className="flex flex-wrap gap-1.5">
+        {items.map((text) => (
+          <li key={text}>
             <button
               onClick={() => onPick(text)}
               disabled={disabled}
-              className="group flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-line bg-surface px-3.5 py-2.5 text-left text-[15px] font-medium transition-colors hover:border-accent/60 active:border-accent active:bg-accent-soft disabled:opacity-50"
+              className="min-h-9 rounded-lg border border-line px-3 py-1.5 text-left text-sm text-muted transition-colors hover:border-muted hover:text-ink active:bg-surface-2 active:text-ink disabled:opacity-50"
             >
-              <span className="min-w-0 break-words">{text}</span>
-              <ChevronIcon className="-rotate-90 shrink-0 text-accent transition-transform group-active:translate-x-0.5" />
+              {text}
             </button>
           </li>
         ))}
