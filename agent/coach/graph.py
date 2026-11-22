@@ -11,6 +11,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
+from .memory import memory_block
 from .prompts import build_system_prompt
 from .tools import TOOLS
 
@@ -24,7 +25,8 @@ def build_graph(model: BaseChatModel):
             today = datetime.now(ZoneInfo(tz)).date()
         except Exception:
             tz, today = "UTC", datetime.utcnow().date()
-        messages = [SystemMessage(content=build_system_prompt(today, tz)), *state["messages"]]
+        notes = memory_block((config.get("configurable") or {}).get("memories") or [])
+        messages = [SystemMessage(content=build_system_prompt(today, tz, notes)), *state["messages"]]
         return {"messages": [await llm.ainvoke(messages, config)]}
 
     graph = StateGraph(MessagesState)

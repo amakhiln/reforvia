@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppShell, ErrorNotice, InlineSpinner } from "@/components/AppShell";
 import { SendIcon } from "@/components/icons";
@@ -236,22 +237,27 @@ export default function CoachPage() {
       title="Coach"
       subtitle="Ask about your training"
       action={
-        messages && messages.length > 0 && !busy ? (
-          confirmClear ? (
-            <span className="flex items-center gap-1 text-sm">
-              <button onClick={clearChat} className="tag rounded-lg bg-danger px-2.5 py-1.5 text-bg">
-                Delete chat
+        <span className="flex items-center gap-1 text-sm">
+          <Link href="/memory" className="tag rounded-lg px-2 py-1.5 text-muted">
+            Notes
+          </Link>
+          {messages && messages.length > 0 && !busy ? (
+            confirmClear ? (
+              <>
+                <button onClick={clearChat} className="tag rounded-lg bg-danger px-2.5 py-1.5 text-bg">
+                  Delete chat
+                </button>
+                <button onClick={() => setConfirmClear(false)} className="tag rounded-lg px-2 py-1.5 text-muted">
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button onClick={() => setConfirmClear(true)} className="tag rounded-lg px-2 py-1.5 text-muted">
+                Clear
               </button>
-              <button onClick={() => setConfirmClear(false)} className="tag rounded-lg px-2 py-1.5 text-muted">
-                Cancel
-              </button>
-            </span>
-          ) : (
-            <button onClick={() => setConfirmClear(true)} className="tag rounded-lg px-2 py-1.5 text-muted">
-              Clear
-            </button>
-          )
-        ) : undefined
+            )
+          ) : null}
+        </span>
       }
     >
       {!COACH_URL && (

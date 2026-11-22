@@ -30,6 +30,7 @@ from .config import Settings
 from .graph import build_graph
 from .grounding import ungrounded
 from .llm import build_model, build_suggest_model
+from .memory import load_memories, memory_block
 from .prompts import build_system_prompt
 from .ratelimit import SlidingWindow
 from .suggest import suggest
@@ -201,7 +202,8 @@ def create_app(
             history.pop(0)
         messages = [*history, HumanMessage(content=body.message)]
 
-        cfg = {"configurable": {"sb": sb, "tz": tz}, "recursion_limit": 14}
+        memories = await load_memories(sb)  # the user's notes; empty if the database hiccups, never a failed chat
+        cfg = {"configurable": {"sb": sb, "tz": tz, "user_id": user_id, "memories": memories}, "recursion_limit": 14}
 
         async def stream() -> AsyncIterator[str]:
             buf: list[str] = []
@@ -293,7 +295,7 @@ def create_app(
             # nor the Coach's own instructions? Only logged, never blocked. It runs while the reply is being saved.
             sources = [
                 _text(msg.content) or str(msg.content) for msg in (final or {}).get("messages", []) if isinstance(msg, ToolMessage)
-            ] + [r["content"] for r in rows] + [build_system_prompt(today, tz)]
+            ] + [r["content"] for r in rows] + [build_system_prompt(today, tz, memory_block(memories))]
             check = asyncio.create_task(asyncio.to_thread(ungrounded, answer, sources, body.message))
             await question_saved()  # the question is stored before the reply
             try:

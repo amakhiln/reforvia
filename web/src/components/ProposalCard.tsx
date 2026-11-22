@@ -41,8 +41,9 @@ export function ProposalCard({
   }, [expiresMs]);
   const expired = proposal.status === "pending" && expiresMs <= now;
   const status = expired ? "expired" : proposal.status;
+  const isNote = proposal.kind === "memory";
   const done: Record<string, string> = {
-    applied: "Applied",
+    applied: isNote ? "Saved" : "Applied",
     rejected: "Dismissed",
     expired: "Expired. Ask the coach again if you still want it.",
     failed: "Couldn’t apply this change. Nothing was changed.",
@@ -66,19 +67,19 @@ export function ProposalCard({
             disabled={deciding}
             className="tag flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-accent text-accent-ink disabled:opacity-60"
           >
-            {deciding ? <InlineSpinner /> : <CheckIcon className="size-4" />} Approve
+            {deciding ? <InlineSpinner /> : <CheckIcon className="size-4" />} {isNote ? "Save" : "Approve"}
           </button>
           <button onClick={() => onDecide(false)} disabled={deciding} className="tag h-11 flex-1 rounded-xl border border-line text-muted disabled:opacity-60">
-            Reject
+            {isNote ? "Not now" : "Reject"}
           </button>
         </div>
       ) : (
         <p role="status" className={`mt-4 flex items-center gap-2 text-sm ${status === "applied" ? "text-ink" : "text-muted"}`}>
           {status === "applied" && <CheckIcon className="size-4 text-accent" />}
           {done[status]}
-          {status === "applied" && proposal.kind === "plan_change" && (
-            <Link href="/plan" className="tag ml-auto text-accent underline">
-              View plan
+          {status === "applied" && (
+            <Link href={isNote ? "/memory" : "/plan"} className="tag ml-auto text-accent underline">
+              {isNote ? "View notes" : "View plan"}
             </Link>
           )}
         </p>

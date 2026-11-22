@@ -24,6 +24,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from coach.config import Settings
 from coach.graph import build_graph
+from coach.memory import load_memories
 from coach.llm import build_model
 from coach.prompts import build_system_prompt
 
@@ -82,7 +83,7 @@ def score(case: Case, answer: str, tool_calls: list[str], tool_results: dict[str
 async def run_case(settings: Settings, case: Case, model=None) -> dict:
     sb, _ = make_supabase()
     graph = build_graph(model or build_model(settings, streaming=True))  # `model` lets tests inject a scripted one
-    cfg = {"configurable": {"sb": sb, "tz": "Asia/Kolkata"}, "recursion_limit": 14}
+    cfg = {"configurable": {"sb": sb, "tz": "Asia/Kolkata", "user_id": "eval-user", "memories": await load_memories(sb)}, "recursion_limit": 14}
     t0, first, tin, tout, state, error = time.perf_counter(), None, 0, 0, None, None
     try:
         async for mode, payload in graph.astream({"messages": [HumanMessage(content=case.question)]}, config=cfg, stream_mode=["messages", "values"]):
@@ -104,7 +105,8 @@ async def run_case(settings: Settings, case: Case, model=None) -> dict:
 
     msgs = (state or {}).get("messages", [])
     ais = [m for m in msgs if isinstance(m, AIMessage)]
-    answer = _text(ais[-1].content).strip() if ais else ""
+    # the app shows the text of every step (advice, then a tool call, then a closing line), so that is what gets scored
+    answer = "\n\n".join(t for t in (_text(m.content).strip() for m in ais) if t)
     calls = [tc["name"] for m in ais for tc in (m.tool_calls or [])]
     results = {m.name: _text(m.content) or str(m.content) for m in msgs if isinstance(m, ToolMessage)}
     texts = [_text(m.content) or str(m.content) for m in msgs if isinstance(m, ToolMessage)]
