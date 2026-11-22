@@ -8,6 +8,7 @@ import { SendIcon } from "@/components/icons";
 import { toast } from "@yusufceng1z/ding-react";
 import { CoachCardView } from "@/components/CoachCards";
 import { ProposalCard } from "@/components/ProposalCard";
+import { SuggestionChips } from "@/components/SuggestionChips";
 import { RichText } from "@/components/RichText";
 import { COACH_URL, CoachHttpError, decideProposal, pingCoach, streamCoach, type CoachCard, type CoachProposal } from "@/lib/coach";
 import { getSupabase } from "@/lib/supabase/client";
@@ -292,21 +293,10 @@ export default function CoachPage() {
           <div className="rounded-2xl bg-surface p-5">
             <p className="font-semibold uppercase tracking-wide">Your training coach</p>
             <p className="mt-1 text-sm text-muted">
-              It reads your plan and logs to answer questions. It can’t change anything, and it isn’t a doctor.
+              It reads your plan and logs to answer questions. It never changes anything without your approval, and it isn’t a doctor.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {SUGGESTIONS.map((s) => (
-              <button
-                key={s}
-                onClick={() => void send(s)}
-                disabled={busy}
-                className="rounded-xl bg-surface px-3.5 py-2.5 text-left text-sm font-medium active:bg-surface-2"
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+          <SuggestionChips title="Try asking" items={SUGGESTIONS} onPick={(c) => void send(c)} disabled={busy} />
         </div>
       )}
 
@@ -365,16 +355,8 @@ export default function CoachPage() {
       )}
 
       {chips.length > 0 && !busy && !error && (
-        <div role="group" aria-label="Suggested next questions" className="mt-4 flex flex-wrap gap-2">
-          {chips.map((c) => (
-            <button
-              key={c}
-              onClick={() => void send(c)}
-              className="rounded-xl bg-surface px-3.5 py-2.5 text-left text-sm font-medium active:bg-surface-2"
-            >
-              {c}
-            </button>
-          ))}
+        <div className="mt-4">
+          <SuggestionChips title="Ask next" items={chips} onPick={(c) => void send(c)} />
         </div>
       )}
 
