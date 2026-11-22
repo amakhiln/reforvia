@@ -12,13 +12,12 @@ from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from .memory import memory_block
-from .prompts import build_system_prompt
+from .agents import COACH, AgentSpec
 from .summary import summary_block
-from .tools import TOOLS
 
 
-def build_graph(model: BaseChatModel):
-    llm = model.bind_tools(TOOLS)
+def build_graph(model: BaseChatModel, spec: AgentSpec = COACH):
+    llm = model.bind_tools(spec.tools)
 
     async def agent(state: MessagesState, config: RunnableConfig):
         tz = (config.get("configurable") or {}).get("tz") or "UTC"
@@ -28,12 +27,12 @@ def build_graph(model: BaseChatModel):
             tz, today = "UTC", datetime.utcnow().date()
         cfg = config.get("configurable") or {}
         notes = memory_block(cfg.get("memories") or []) + summary_block(cfg.get("summary") or "")
-        messages = [SystemMessage(content=build_system_prompt(today, tz, notes)), *state["messages"]]
+        messages = [SystemMessage(content=spec.prompt(today, tz, notes)), *state["messages"]]
         return {"messages": [await llm.ainvoke(messages, config)]}
 
     graph = StateGraph(MessagesState)
     graph.add_node("agent", agent)
-    graph.add_node("tools", ToolNode(TOOLS, handle_tool_errors=True))
+    graph.add_node("tools", ToolNode(spec.tools, handle_tool_errors=True))
     graph.add_edge(START, "agent")
     graph.add_conditional_edges("agent", tools_condition, {"tools": "tools", END: END})
     graph.add_edge("tools", "agent")

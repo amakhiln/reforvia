@@ -66,7 +66,7 @@ async def update_summary(sb: UserSupabase, user_id: str, llm: BaseChatModel, win
     try:
         have = await sb.select("agent_chat_summary", {"select": "summary,covered_until", "limit": "1"})
         old_text, covered = (have[0]["summary"], have[0]["covered_until"]) if have else ("", None)
-        params = {"select": "role,content,created_at", "order": "created_at.desc", "offset": str(window), "limit": str(FETCH)}
+        params = {"select": "role,content,created_at", "agent": "eq.coach", "order": "created_at.desc", "offset": str(window), "limit": str(FETCH)}
         if covered:
             params["created_at"] = f"gt.{covered}"
         older = await sb.select("coach_messages", params)

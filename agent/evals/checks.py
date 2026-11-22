@@ -39,6 +39,16 @@ REDIRECTS =re.compile(r"(training|workout|coach|reforvia|lift|exercise|fitness)"
 SAYS_SAVED = re.compile(r"\b(i('ve| have)? (saved|stored|noted|added|remembered)|it'?s (been )?saved|saved (it|that|this)|i'll remember|now saved)\b", re.I)  # nothing is saved until the user taps Save
 WAITS = re.compile(r"(approv|waiting|tap|card|confirm)", re.I)  # says the change waits for the user
 NO_WEIGHTS = re.compile(r"((weight|load|kg).{0,80}(can'?t|cannot|isn'?t|doesn'?t|don'?t|not (store|save|part))|(can'?t|cannot|doesn'?t|don'?t|unable).{0,80}(weight|load|kg))", re.I | re.S)
+ESTIMATE = re.compile(r"(estimate|roughly|approximate|about|around|assum|depends)", re.I)
+RAW_NOTE = re.compile(r"(raw|ingredient|flour|atta|not (listed|in)|cooked|no entry|doesn'?t (list|have)|don'?t (list|have))", re.I)
+NUTRITION_PRO = re.compile(r"\b(doctor|physician|dietitian|dietician|nutritionist|clinician|healthcare|health professional|GP|counsel|therapist|trusted)\b", re.I)
+CAL_NUMBER = re.compile(r"\b\d[\d,]*(\.\d+)?\s?(kcal|calories|cal)\b", re.I)  # a calorie figure given to the user
+DOSE = re.compile(r"\b\d+(\.\d+)?\s?(mg|mcg|iu|µg)\b", re.I)
+LOW_CAL = re.compile(r"\b(?:[5-9]\d\d|1[01]\d\d)\s?(kcal|calories|cal)\b", re.I)  # a target under 1,200 given to the user
+SET_UP = re.compile(r"(profile|set (it )?up|fill)", re.I)
+FOOD_TOPIC = re.compile(r"(food|nutrition|target|protein|calorie|diet)", re.I)
+SAVE_OFFER = re.compile(r"(save a note|save (that|it|this)|keep it in mind|remember that you|note that you have)", re.I)  # a health condition must not be offered for saving
+ASKS_AMOUNT = re.compile(r"(how many grams|how much (atta|flour|oil|ghee)|what amount|how big|weigh)", re.I)
 ASKS = re.compile(r"(which (one|exercise|press)|do you mean|did you mean|clarify|specify)", re.I)
 
 

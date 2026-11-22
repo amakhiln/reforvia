@@ -4,7 +4,7 @@ Personal workout tracker (built from the owner's Excel plan), designed to become
 
 ## Layout
 - `web/` Next.js 16 PWA (App Router, Tailwind v4 with CSS-variable tokens for dark/light, `@supabase/ssr`). Next 16 differs from older versions: read `web/node_modules/next/dist/docs/` before using unfamiliar APIs. Auth gating lives in `src/proxy.ts` (not middleware). Client components that call `new Date()` or `useParams` during render must sit under `<Suspense>` in a server `page.tsx`.
-- `agent/` Python service (FastAPI + LangGraph) on Render. `coach/graph.py` is the chat Coach (read-only tools, streams SSE), `coach/analyst.py` is the weekly Analyst (no tools, numbers come from SQL). Agents call Supabase over REST with the user's own JWT so RLS applies. Only the weekly job uses the server-side secret key.
+- `agent/` Python service (FastAPI + LangGraph) on Render. `coach/graph.py` is the chat Coach (read-only tools, streams SSE), `coach/analyst.py` is the weekly Analyst (no tools, numbers come from SQL). The Nutrition agent shares the chat service (`coach/agents.py` lists the agents; the request's `agent` field picks one). Its targets come from `coach/nutrition.py`, not the model; food values come from the read-only `foods` table (IFCT 2017, loaded by `scripts/import_ifct.py`). Agents call Supabase over REST with the user's own JWT so RLS applies. Only the weekly job uses the server-side secret key.
 - `supabase/migrations/` numbered SQL, applied in order in the Supabase SQL editor.
 - `scripts/generate_seed.py` rebuilds `0002_seed_default_program.sql` from the Excel plan.
 - `scripts/import_wger.py` builds migrations 0009+ (wger exercises) and uploads their media to Supabase Storage. Run locally only; it needs the secret key for the upload step.

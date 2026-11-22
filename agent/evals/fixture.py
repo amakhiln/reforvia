@@ -39,6 +39,31 @@ EXERCISES: dict[str, dict[str, Any]] = {
 for k, v in EXERCISES.items():
     v.update(id=f"ex-{k}", video_url=None, is_timed=False)
 
+def _food(code, name, group, kcal, p, f, c, fibre, local="", **extra):
+    base = dict(id=f"food-{code}", code=code, name=name, food_group=group, energy_kcal=kcal, energy_derived=False, protein_g=p, fat_g=f, carbs_g=c,
+                fibre_g=fibre, sugars_g=extra.get("sugars", 0.5), sat_fat_g=extra.get("sat", 0.3), calcium_mg=extra.get("ca", 30.0), iron_mg=extra.get("fe", 3.0),
+                sodium_mg=extra.get("na", 5.0), potassium_mg=extra.get("k", 300.0), vitamin_c_mg=0.0, local_names=local)
+    return base
+
+
+# A few real IFCT 2017 rows (per 100 g, raw), enough to judge how a model uses the food tools.
+FOODS = [
+    _food("A019", "Wheat flour, atta", "Cereals and Millets", 320.3, 10.57, 1.53, 64.17, 11.36, "H. Atta; B. Ata; Mar. Kaneek", sugars=1.8, sat=0.21, ca=30.94, fe=4.1, na=2.04, k=311.0),
+    _food("A015", "Rice, raw, milled", "Cereals and Millets", 356.4, 7.94, 0.52, 78.24, 2.81, "H. Chawal; Tam. Arisi", sugars=0.69, sat=0.18, ca=7.49, fe=0.65, na=2.34, k=108.0),
+    _food("B001", "Bengal gram, dal", "Grain Legumes", 329.1, 21.55, 5.31, 46.72, 15.15, "H. Chan-ki-dal; G. Chana-ni-daad; E. Split Bengal gram, Chickpea", sugars=1.03, sat=0.47, ca=46.32, fe=6.08, na=20.83, k=957.0),
+    _food("M001", "Egg, poultry, whole, raw", "Egg and Egg Products", 134.8, 13.28, 9.15, 0.0, 0.0, "H. Anda", sugars=0.0, sat=2.96, ca=49.44, fe=1.82, na=123.0, k=138.0),
+    _food("T013", "Ghee", "Edible Oils and Fats", 900.0, 0.0, 100.0, 0.0, 0.0, "H. Ghee", sugars=0.0, sat=71.02, ca=0.0, fe=0.0, na=0.0, k=0.0),
+    _food("A003", "Bajra", "Cereals and Millets", 348.0, 10.96, 5.43, 61.78, 11.49, "H. Bajra; E. Pearl millet", sugars=0.81, sat=0.88, ca=27.35, fe=6.42, na=4.11, k=365.0),
+]
+FOODS[3]["energy_derived"] = False
+FOODS[4]["energy_derived"] = True
+
+PROFILES = {
+    "adult": dict(birth_year=date.today().year - 30, sex="male", height_cm=178, weight_kg=80, goal="maintain", diet="vegetarian", see_professional=False),
+    "flagged": dict(birth_year=date.today().year - 30, sex="female", height_cm=165, weight_kg=60, goal="lose", diet="any", see_professional=True),
+    "none": None,
+}
+
 # (session, ISO weekday 1..7, [(exercise, sets, rep_target, rep_min, rep_max)])
 PLAN = [
     ("Pull A", 1, [("lat", 3, "8–12", 8, 12), ("row", 3, "10–12", 10, 12), ("hammer", 3, "10–12", 10, 12)]),
@@ -82,7 +107,8 @@ def _e1rm(load: float, reps: int) -> float | None:
 
 
 class Fixture:
-    def __init__(self, today: date | None = None):
+    def __init__(self, today: date | None = None, profile: str = "adult"):
+        self.profile = PROFILES[profile]
         self.stored: list[tuple[str, dict]] = []
         self.today = today or date.today()
         self.logs = build_logs(self.today)
@@ -147,6 +173,7 @@ class Fixture:
                 "previous_sets": lambda: self.previous_sets(body["p_exercise_ids"], body.get("p_exclude_workout", ZERO)),
                 "weekly_summary": lambda: self.weekly(int(body["p_weeks"]), date.fromisoformat(body["p_today"])),
                 "personal_records": lambda: self.records(),
+                "search_foods": lambda: self.search_foods(body["q"], int(body.get("lim", 8))),
             }[name]()
             return httpx.Response(200, json=data)
         table = path.rsplit("/", 1)[1]
@@ -154,6 +181,18 @@ class Fixture:
             self.stored.append((table, json.loads(request.content)))
             return httpx.Response(201)
         return httpx.Response(200, json=getattr(self, f"_t_{table}")(params))
+
+    def search_foods(self, q: str, lim: int) -> list[dict]:
+        q = q.strip().lower()
+        hits = [f for f in FOODS if len(q) >= 2 and q in (f["name"] + " " + f["local_names"]).lower()]
+        return sorted(hits, key=lambda f: (f["name"].lower() != q, len(f["name"])))[:lim]
+
+    def _t_foods(self, params: dict) -> list[dict]:
+        code = params.get("code", "").removeprefix("eq.")
+        return [f for f in FOODS if f["code"] == code][:1]
+
+    def _t_nutrition_profile(self, _: dict) -> list[dict]:
+        return [self.profile] if self.profile else []
 
     def _t_agent_memories(self, _: dict) -> list[dict]:
         return [dict(id="11111111-1111-4111-8111-111111111111", kind="fact", text="Trains 4 days a week, Monday to Thursday")]
@@ -190,7 +229,7 @@ class Fixture:
         return []
 
 
-def make_supabase(today: date | None = None) -> tuple[UserSupabase, Fixture]:
-    fx = Fixture(today)
+def make_supabase(today: date | None = None, profile: str = "adult") -> tuple[UserSupabase, Fixture]:
+    fx = Fixture(today, profile)
     client = httpx.AsyncClient(transport=httpx.MockTransport(fx.handle))
     return UserSupabase("https://fixture.local", "key", "token", client), fx
