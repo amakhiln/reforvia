@@ -12,3 +12,4 @@ web/.impeccable/
 .mcp.json
 scripts/.wger-cache.json
 agent/evals/results/
+scripts/.ifct-cache.tgz

@@ -91,3 +91,12 @@ Remove and reorder exercises, new sessions or days, plan reset by the Coach, cus
 - Storing health notes is a privacy commitment: keep the delete path and mention it in the app copy.
 - Phase 1 adds a small cost to every reply: measure it and keep the off switch.
 - A cheap model may write weak chips: the evals decide the default model.
+
+## Next: a Nutrition agent (planned, data loaded first)
+
+A third agent for food and targets, with its own prompt, tools and tab. Numbers come from code and data, never from the model.
+
+- **Food data (done on branch `nutrition-foods-data`, not yet applied):** the Indian Food Composition Tables 2017 (National Institute of Nutrition, Hyderabad), 542 raw foods, loaded by `scripts/import_ifct.py` into a read-only `foods` table (migrations 0020 and 0021). Energy is kcal and minerals are mg, per 100 g. Provenance is kept on every row.
+- **Known limits of that data:** it lists raw ingredients, not cooked dishes (no roti or cooked dal), so dishes need a separate, clearly labelled estimate from ingredient weights. 14 fat-only foods had no energy and are worked out from their macros (marked `energy_derived`). Two rows (lemon juice, chicken leg) report energy far from their macros and are flagged, not changed. Check the tables' terms of use before shipping.
+- **Then:** a profile and a deterministic targets calculator, a read-only Q&A agent with a food-search tool and the safety rails (no crash diets, a calorie floor, referrals for medical conditions, eating-disorder signals and under-18s), then food logging through the approval card, then a line in the weekly review.
+- **Supervisor:** one chat that routes to the Coach or the Nutrition agent comes after the two agents are tested on their own.
