@@ -42,3 +42,12 @@ def card_for(tool: str, result: str) -> dict[str, Any] | None:
         rows = data.get("bests", [])[:6]
         return {"kind": "bests", "rows": rows} if rows else None
     return None
+
+
+def proposal_for(result: str) -> dict[str, Any] | None:
+    """A tool that stored a proposal puts it under "proposal" in its result; this is what the approval card shows."""
+    data = _load(result)
+    prop = (data or {}).get("proposal")
+    if isinstance(prop, dict) and prop.get("id") and prop.get("kind") and prop.get("summary"):
+        return {k: prop.get(k) for k in ("id", "kind", "summary", "preview", "expires_at")}
+    return None

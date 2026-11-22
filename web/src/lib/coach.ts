@@ -8,11 +8,24 @@ export type CoachCard =
   | { kind: "progress"; exercise: string; points: { date: string; est_1rm_kg: number; top_set: string }[]; next_load_kg: number | null }
   | { kind: "bests"; rows: { exercise: string; set: string; est_1rm_kg: number | null; date: string }[] };
 
+export type ProposalStatus = "pending" | "applied" | "rejected" | "expired" | "failed";
+
+/** A change the Coach has asked to make. Nothing happens until the user approves it on the card. */
+export type CoachProposal = {
+  id: string;
+  kind: "plan_change" | "memory";
+  summary: string;
+  preview: string[];
+  expires_at: string;
+  status: ProposalStatus;
+};
+
 export type CoachEvent =
   | { type: "tool"; id: string; label: string }
   | { type: "tool_done"; id: string }
   | { type: "card"; card: CoachCard }
   | { type: "suggestions"; items: string[] }
+  | { type: "proposal"; proposal: CoachProposal }
   | { type: "token"; text: string }
   | { type: "error"; message: string }
   | { type: "done" };
@@ -37,6 +50,7 @@ function fromAgUi(e: Record<string, unknown>): CoachEvent | null {
     case "CUSTOM":
       if (e.name === "card") return { type: "card", card: e.value as CoachCard };
       if (e.name === "suggestions" && Array.isArray(e.value)) return { type: "suggestions", items: e.value.filter((x): x is string => typeof x === "string") };
+      if (e.name === "proposal" && e.value && typeof e.value === "object") return { type: "proposal", proposal: { ...(e.value as Omit<CoachProposal, "status">), status: "pending" } };
       return null;
     case "TEXT_MESSAGE_CONTENT":
       return { type: "token", text: String(e.delta ?? "") };
@@ -125,5 +139,17 @@ export async function generateSummary(): Promise<GenerateStatus> {
   const res = await fetch(`${COACH_URL}/summaries/generate`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
   const body = (await res.json().catch(() => ({}))) as { status?: GenerateStatus; error?: string };
   if (!res.ok || !body.status) throw new CoachHttpError(body.error ?? "Couldn’t create the summary.", res.status);
+  return body.status;
+}
+
+
+/** Approves or rejects a proposal. The server answers with how it ended; a second tap just reports the first outcome. */
+export async function decideProposal(id: string, approve: boolean): Promise<ProposalStatus> {
+  const { data } = await getSupabase().auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new CoachHttpError("You’re signed out. Please sign in again.", 401);
+  const res = await fetch(`${COACH_URL}/proposals/${id}/${approve ? "approve" : "reject"}`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+  const body = (await res.json().catch(() => ({}))) as { status?: ProposalStatus; error?: string };
+  if (!res.ok || !body.status) throw new CoachHttpError(body.error ?? "Couldn’t record your decision.", res.status);
   return body.status;
 }

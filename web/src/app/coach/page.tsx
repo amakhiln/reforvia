@@ -4,9 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell, ErrorNotice, InlineSpinner } from "@/components/AppShell";
 import { SendIcon } from "@/components/icons";
+import { toast } from "@yusufceng1z/ding-react";
 import { CoachCardView } from "@/components/CoachCards";
+import { ProposalCard } from "@/components/ProposalCard";
 import { RichText } from "@/components/RichText";
-import { COACH_URL, CoachHttpError, pingCoach, streamCoach, type CoachCard } from "@/lib/coach";
+import { COACH_URL, CoachHttpError, decideProposal, pingCoach, streamCoach, type CoachCard, type CoachProposal } from "@/lib/coach";
 import { getSupabase } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
@@ -32,6 +34,8 @@ export default function CoachPage() {
   const [confirmClear, setConfirmClear] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [chips, setChips] = useState<string[]>([]); // next-step suggestions for the latest reply; not stored
+  const [proposals, setProposals] = useState<CoachProposal[]>([]); // changes the coach has asked for, waiting for a decision
+  const [deciding, setDeciding] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true); // keep following the reply only while the reader is near the bottom
   const abortRef = useRef<AbortController | null>(null);
@@ -52,6 +56,20 @@ export default function CoachPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
+
+  // Proposals still waiting for an answer survive a refresh because they live in the database.
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    void getSupabase()
+      .from("agent_proposals")
+      .select("id,kind,summary,preview,expires_at,status")
+      .eq("status", "pending")
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: true })
+      .then(({ data }: { data: CoachProposal[] | null }) => {
+        if (data?.length) setProposals((cur) => [...data.filter((p) => !cur.some((c) => c.id === p.id)), ...cur]);
+      });
+  }, []);
 
   // Wake the service (Render's free tier sleeps when idle) as soon as the tab opens.
   useEffect(() => {
@@ -140,6 +158,8 @@ export default function CoachPage() {
             patch((x) => ({ ...x, steps: [...(x.steps ?? []), { id: ev.id, label: ev.label, done: false }] }));
           } else if (ev.type === "tool_done") {
             patch((x) => ({ ...x, steps: x.steps?.map((t) => (t.id === ev.id ? { ...t, done: true } : t)) }));
+          } else if (ev.type === "proposal") {
+            setProposals((cur) => (cur.some((p) => p.id === ev.proposal.id) ? cur : [...cur, ev.proposal]));
           } else if (ev.type === "suggestions") {
             setChips(ev.items);
           } else if (ev.type === "card") {
@@ -180,6 +200,23 @@ export default function CoachPage() {
     setConfirmClear(false);
     if (error) setError(error.message);
     else setMessages([]);
+  }
+
+  async function decide(id: string, approve: boolean) {
+    setDeciding(id);
+    try {
+      const status = await decideProposal(id, approve);
+      setProposals((cur) => cur.map((p) => (p.id === id ? { ...p, status } : p)));
+      if (status === "applied") toast.success("Change applied");
+      else if (status === "rejected") toast.info("Dismissed");
+      else if (status === "expired") toast.info("That proposal expired");
+      else if (status === "failed") toast.error("Couldn’t apply that change");
+    } catch (e) {
+      if (e instanceof CoachHttpError && e.status === 401) router.replace("/login");
+      else toast.error(e instanceof Error ? e.message : "Couldn’t record your decision.");
+    } finally {
+      setDeciding(null);
+    }
   }
 
   async function copy(m: Msg) {
@@ -312,6 +349,14 @@ export default function CoachPage() {
           <p className="pl-1 text-xs text-muted">{status}</p>
         )}
       </div>
+
+      {proposals.length > 0 && (
+        <div className="mt-4 space-y-3">
+          {proposals.map((p) => (
+            <ProposalCard key={p.id} proposal={p} deciding={deciding === p.id} onDecide={(approve) => void decide(p.id, approve)} />
+          ))}
+        </div>
+      )}
 
       {chips.length > 0 && !busy && !error && (
         <div role="group" aria-label="Suggested next questions" className="mt-4 flex flex-wrap gap-2">
