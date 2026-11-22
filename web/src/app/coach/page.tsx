@@ -296,7 +296,7 @@ export default function CoachPage() {
               It reads your plan and logs to answer questions. It never changes anything without your approval, and it isn’t a doctor.
             </p>
           </div>
-          <SuggestionChips title="Try asking" items={SUGGESTIONS} onPick={(c) => void send(c)} disabled={busy} />
+          <SuggestionChips title="Try asking" showTitle items={SUGGESTIONS} onPick={(c) => void send(c)} disabled={busy} />
         </div>
       )}
 
