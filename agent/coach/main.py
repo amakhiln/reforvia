@@ -27,9 +27,10 @@ from .cards import card_for
 from .config import Settings
 from .graph import build_graph
 from .grounding import ungrounded
-from .llm import build_model
+from .llm import build_model, build_suggest_model
 from .prompts import build_system_prompt
 from .ratelimit import SlidingWindow
+from .suggest import suggest
 from .supa import SupabaseError, UserSupabase
 
 log = logging.getLogger("coach")
@@ -61,7 +62,11 @@ def _local_today(tz: str | None) -> tuple[date, str]:
 
 
 def create_app(
-    settings: Settings | None = None, model: Any = None, http: httpx.AsyncClient | None = None, push: PushSend | None = None
+    settings: Settings | None = None,
+    model: Any = None,
+    http: httpx.AsyncClient | None = None,
+    push: PushSend | None = None,
+    suggest_model: Any = None,
 ) -> FastAPI:
     settings = settings or Settings()
     limiter = SlidingWindow(settings.rate_per_minute)
@@ -93,6 +98,22 @@ def create_app(
         if model is not None:
             return model
         return build_model(settings, streaming)
+
+    def get_suggest_llm():
+        """None turns chips off. With an injected chat model (tests) they stay off unless a suggest model is injected too."""
+        if not settings.suggestions:
+            return None
+        if suggest_model is not None:
+            return suggest_model
+        if model is not None:
+            return None
+        if "suggest" not in state:
+            try:
+                state["suggest"] = build_suggest_model(settings)
+            except Exception:
+                log.warning("could not build the suggestion model", exc_info=True)
+                state["suggest"] = None
+        return state["suggest"]
 
     def get_graph():
         if state["graph"] is None:
@@ -253,6 +274,15 @@ def create_app(
                 )
                 yield _sse({"type": "RUN_ERROR", "message": f"The coach didn't produce an answer (reason: {finish or 'unknown'}). Please try again."})
                 return
+            yield _sse({"type": "TEXT_MESSAGE_END", "messageId": msg_id})
+            tools_used = [m.name or "" for m in (final or {}).get("messages", []) if isinstance(m, ToolMessage)]
+            suggest_llm = get_suggest_llm()
+            # Chips are written while the reply is saved, so they add little waiting.
+            chips_task = (
+                asyncio.create_task(asyncio.wait_for(suggest(suggest_llm, body.message, answer, tools_used), timeout=6))
+                if suggest_llm is not None
+                else None
+            )
             # Live check: does the reply state figures that are in neither the data the tools returned, the conversation,
             # nor the Coach's own instructions? Only logged, never blocked. It runs while the reply is being saved.
             sources = [
@@ -277,7 +307,13 @@ def create_app(
                 "coach reply: before model %.2fs, model first token %.2fs, total %.2fs, tools %d, tokens in/out %d/%d, unsourced figures %d",
                 t_model - t0, first_token or 0.0, time.perf_counter() - t0, len(announced), tokens_in, tokens_out, len(unsourced),
             )
-            yield _sse({"type": "TEXT_MESSAGE_END", "messageId": msg_id})
+            if chips_task is not None:
+                try:
+                    chips = await chips_task
+                except Exception:  # a timeout or failure never affects the reply
+                    chips = []
+                if chips:
+                    yield _sse({"type": "CUSTOM", "name": "suggestions", "value": chips})
             yield _sse({"type": "RUN_FINISHED", "threadId": "coach", "runId": run_id})
 
         async def events() -> AsyncIterator[str]:

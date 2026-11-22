@@ -31,6 +31,7 @@ export default function CoachPage() {
   const [error, setError] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [chips, setChips] = useState<string[]>([]); // next-step suggestions for the latest reply; not stored
   const endRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true); // keep following the reply only while the reader is near the bottom
   const abortRef = useRef<AbortController | null>(null);
@@ -87,6 +88,7 @@ export default function CoachPage() {
       const content = text.trim();
       if (!content || busy || !COACH_URL) return;
       setError(null);
+      setChips([]);
       setDraft("");
       stick.current = true;
       setBusy(true);
@@ -138,6 +140,8 @@ export default function CoachPage() {
             patch((x) => ({ ...x, steps: [...(x.steps ?? []), { id: ev.id, label: ev.label, done: false }] }));
           } else if (ev.type === "tool_done") {
             patch((x) => ({ ...x, steps: x.steps?.map((t) => (t.id === ev.id ? { ...t, done: true } : t)) }));
+          } else if (ev.type === "suggestions") {
+            setChips(ev.items);
           } else if (ev.type === "card") {
             patch((x) => ({ ...x, cards: [...(x.cards ?? []), ev.card] }));
           } else if (ev.type === "token") {
@@ -308,6 +312,20 @@ export default function CoachPage() {
           <p className="pl-1 text-xs text-muted">{status}</p>
         )}
       </div>
+
+      {chips.length > 0 && !busy && !error && (
+        <div role="group" aria-label="Suggested next questions" className="mt-4 flex flex-wrap gap-2">
+          {chips.map((c) => (
+            <button
+              key={c}
+              onClick={() => void send(c)}
+              className="rounded-xl bg-surface px-3.5 py-2.5 text-left text-sm font-medium active:bg-surface-2"
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      )}
 
       {error && (
         <div className="mt-4">

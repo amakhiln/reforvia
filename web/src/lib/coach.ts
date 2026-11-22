@@ -12,6 +12,7 @@ export type CoachEvent =
   | { type: "tool"; id: string; label: string }
   | { type: "tool_done"; id: string }
   | { type: "card"; card: CoachCard }
+  | { type: "suggestions"; items: string[] }
   | { type: "token"; text: string }
   | { type: "error"; message: string }
   | { type: "done" };
@@ -34,7 +35,9 @@ function fromAgUi(e: Record<string, unknown>): CoachEvent | null {
     case "TOOL_CALL_END":
       return { type: "tool_done", id: String(e.toolCallId) };
     case "CUSTOM":
-      return e.name === "card" ? { type: "card", card: e.value as CoachCard } : null;
+      if (e.name === "card") return { type: "card", card: e.value as CoachCard };
+      if (e.name === "suggestions" && Array.isArray(e.value)) return { type: "suggestions", items: e.value.filter((x): x is string => typeof x === "string") };
+      return null;
     case "TEXT_MESSAGE_CONTENT":
       return { type: "token", text: String(e.delta ?? "") };
     case "RUN_ERROR":
