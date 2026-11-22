@@ -58,6 +58,8 @@ Keep it for running the agents (the tool loop, a supervisor later). Do **not** u
 
 ## Phase 5: rolling summary of older chats (migration)
 
+*Built on branch `coach-summary`: migration 0019, `coach/summary.py`, background update after each reply, summary on the notes screen, and cleared with the chat. Automatic, with a delete button. `COACH_SUMMARY=off` turns it off.*
+
 - One summary row per user, updated when history exceeds the 20-message window, so a long conversation does not lose context.
 - The summary is data, never instructions, and is loaded next to memories.
 

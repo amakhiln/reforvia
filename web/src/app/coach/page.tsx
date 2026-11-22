@@ -198,7 +198,9 @@ export default function CoachPage() {
   );
 
   async function clearChat() {
-    const { error } = await getSupabase().from("coach_messages").delete().not("id", "is", null);
+    const sb = getSupabase();
+    const { error } = await sb.from("coach_messages").delete().not("id", "is", null);
+    if (!error) await sb.from("agent_chat_summary").delete().not("user_id", "is", null); // a summary of a deleted chat must go too
     setConfirmClear(false);
     if (error) setError(error.message);
     else setMessages([]);

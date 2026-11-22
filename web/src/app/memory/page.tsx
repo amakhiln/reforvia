@@ -25,6 +25,8 @@ export default function MemoryPage() {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
   const [confirm, setConfirm] = useState<string | null>(null);
+  const [summary, setSummary] = useState<string | null>(null); // what the Coach remembers of older chat; written by the coach service
+  const [confirmSummary, setConfirmSummary] = useState(false);
 
   const load = useCallback(async () => {
     const { data, error } = await getSupabase()
@@ -35,6 +37,8 @@ export default function MemoryPage() {
       .limit(100);
     if (error) setError(error.message);
     else setNotes((data ?? []) as Note[]);
+    const sum = await getSupabase().from("agent_chat_summary").select("summary").maybeSingle();
+    setSummary((sum.data as { summary: string } | null)?.summary ?? null);
   }, []);
 
   useEffect(() => {
@@ -87,6 +91,16 @@ export default function MemoryPage() {
     await load();
   }
 
+  async function removeSummary() {
+    setBusy(true);
+    const { error } = await getSupabase().from("agent_chat_summary").delete().not("user_id", "is", null);
+    setBusy(false);
+    setConfirmSummary(false);
+    if (error) return void toast.error(error.message);
+    setSummary(null);
+    toast.info("Summary deleted");
+  }
+
   return (
     <AppShell title="What the Coach knows" subtitle="Notes you’ve shared" backHref="/coach">
       <p className="mb-4 rounded-xl bg-surface-2 px-3.5 py-2.5 text-xs text-muted">
@@ -136,6 +150,30 @@ export default function MemoryPage() {
           </button>
         </div>
       </form>
+
+      {summary && (
+        <section className="mb-5 rounded-2xl bg-surface p-4" aria-label="Earlier conversation">
+          <h2 className="tag text-muted">Earlier conversation</h2>
+          <p className="mt-1 whitespace-pre-line break-words text-[15px]">{summary}</p>
+          <p className="mt-2 text-xs text-muted">A short summary the Coach keeps of chat that has scrolled out of view. Deleting the chat deletes it too.</p>
+          <div className="mt-3 flex items-center gap-1">
+            {confirmSummary ? (
+              <>
+                <button onClick={() => void removeSummary()} disabled={busy} className="tag rounded-lg bg-danger px-2.5 py-1.5 text-bg">
+                  Delete summary
+                </button>
+                <button onClick={() => setConfirmSummary(false)} className="tag rounded-lg px-2 py-1.5 text-muted">
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button onClick={() => setConfirmSummary(true)} className="tag rounded-lg px-2 py-1.5 text-muted">
+                Delete
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
       {notes === null && !error && <Spinner />}
       {notes?.length === 0 && (

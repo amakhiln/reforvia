@@ -34,6 +34,7 @@ from .memory import load_memories, memory_block
 from .prompts import build_system_prompt
 from .ratelimit import SlidingWindow
 from .suggest import suggest
+from .summary import load_summary, summary_block, update_summary
 from .supa import SupabaseError, UserSupabase
 
 log = logging.getLogger("coach")
@@ -73,7 +74,7 @@ def create_app(
 ) -> FastAPI:
     settings = settings or Settings()
     limiter = SlidingWindow(settings.rate_per_minute)
-    state: dict[str, Any] = {"http": http, "graph": None, "analyst": None, "push": push, "push_built": push is not None}
+    state: dict[str, Any] = {"tasks": set(), "http": http, "graph": None, "analyst": None, "push": push, "push_built": push is not None}
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -102,21 +103,20 @@ def create_app(
             return model
         return build_model(settings, streaming)
 
-    def get_suggest_llm():
-        """None turns chips off. With an injected chat model (tests) they stay off unless a suggest model is injected too."""
-        if not settings.suggestions:
-            return None
+    def get_small_llm():
+        """The small cheap model for chips and the chat summary. With an injected chat model (tests) it stays off unless
+        a suggest model is injected too."""
         if suggest_model is not None:
             return suggest_model
         if model is not None:
             return None
-        if "suggest" not in state:
+        if "small" not in state:
             try:
-                state["suggest"] = build_suggest_model(settings)
+                state["small"] = build_suggest_model(settings)
             except Exception:
-                log.warning("could not build the suggestion model", exc_info=True)
-                state["suggest"] = None
-        return state["suggest"]
+                log.warning("could not build the small model", exc_info=True)
+                state["small"] = None
+        return state["small"]
 
     def get_graph():
         if state["graph"] is None:
@@ -203,7 +203,8 @@ def create_app(
         messages = [*history, HumanMessage(content=body.message)]
 
         memories = await load_memories(sb)  # the user's notes; empty if the database hiccups, never a failed chat
-        cfg = {"configurable": {"sb": sb, "tz": tz, "user_id": user_id, "memories": memories}, "recursion_limit": 14}
+        earlier = await load_summary(sb)  # what scrolled out of the window; empty if none or the database hiccups
+        cfg = {"configurable": {"sb": sb, "tz": tz, "user_id": user_id, "memories": memories, "summary": earlier}, "recursion_limit": 14}
 
         async def stream() -> AsyncIterator[str]:
             buf: list[str] = []
@@ -284,7 +285,7 @@ def create_app(
                 return
             yield _sse({"type": "TEXT_MESSAGE_END", "messageId": msg_id})
             tools_used = [m.name or "" for m in (final or {}).get("messages", []) if isinstance(m, ToolMessage)]
-            suggest_llm = get_suggest_llm()
+            suggest_llm = get_small_llm() if settings.suggestions else None
             # Chips are written while the reply is saved, so they add little waiting.
             chips_task = (
                 asyncio.create_task(asyncio.wait_for(suggest(suggest_llm, body.message, answer, tools_used), timeout=6))
@@ -295,7 +296,7 @@ def create_app(
             # nor the Coach's own instructions? Only logged, never blocked. It runs while the reply is being saved.
             sources = [
                 _text(msg.content) or str(msg.content) for msg in (final or {}).get("messages", []) if isinstance(msg, ToolMessage)
-            ] + [r["content"] for r in rows] + [build_system_prompt(today, tz, memory_block(memories))]
+            ] + [r["content"] for r in rows] + [build_system_prompt(today, tz, memory_block(memories) + summary_block(earlier))]
             check = asyncio.create_task(asyncio.to_thread(ungrounded, answer, sources, body.message))
             await question_saved()  # the question is stored before the reply
             try:
@@ -304,6 +305,11 @@ def create_app(
                     await sb.rpc("agent_add_tokens", {"p_day": today.isoformat(), "p_input": tokens_in, "p_output": tokens_out})
             except SupabaseError as exc:
                 log.warning("could not save coach reply: %s", exc)
+            if settings.chat_summary and (small := get_small_llm()) is not None:
+                # Runs after the reply is saved and never delays it; the next chat reads whatever it wrote.
+                task = asyncio.create_task(update_summary(sb, user_id, small, settings.history_messages))
+                state["tasks"].add(task)
+                task.add_done_callback(state["tasks"].discard)
             try:
                 unsourced = await check
             except Exception:  # a failing check must never break a reply
