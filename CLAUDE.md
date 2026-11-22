@@ -17,7 +17,7 @@ Personal workout tracker (built from the owner's Excel plan), designed to become
 
 ## Rules
 - Never edit an applied migration. Add the next numbered file. Every table gets RLS with `user_id = (select auth.uid())`.
-- The Coach may only read data. Do not add write tools without asking.
+- The Coach never changes plan or log data. It may only create proposals (`agent_proposals`); the user approves on a card and SQL applies them as that user. Do not add write tools without asking.
 - `SUPABASE_SECRET_KEY` is server-only: never in `web/`, never in `NEXT_PUBLIC_*`, never logged.
 - Progression: double progression (hold load until all sets hit the top of the rep range, then +1 kg under 10 kg, +2.5 kg under 50, else +5). Estimated 1RM is Epley, reps 1 to 12 only.
 - Charts follow one accent colour, thin marks, tooltips, a table view, and keyboard support.

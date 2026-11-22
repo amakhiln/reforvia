@@ -9,6 +9,7 @@ import uuid
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from typing import Any, AsyncIterator
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -23,7 +24,8 @@ from pydantic import BaseModel, Field
 
 from .analyst import PushSend, build_analyst_graph, last_completed_week, make_web_push, run_weekly, service_client, summarise_user
 from .auth import AuthError, authenticate
-from .cards import card_for
+from .cards import card_for, proposal_for
+from .proposals import decide
 from .config import Settings
 from .graph import build_graph
 from .grounding import ungrounded
@@ -223,9 +225,13 @@ def create_app(
                             if isinstance(msg, ToolMessage) and msg.tool_call_id not in seen_results:
                                 seen_results.add(msg.tool_call_id)
                                 yield _sse({"type": "TOOL_CALL_END", "toolCallId": msg.tool_call_id})
-                                card = card_for(msg.name or "", _text(msg.content) or str(msg.content))
+                                text = _text(msg.content) or str(msg.content)
+                                card = card_for(msg.name or "", text)
                                 if card:
                                     yield _sse({"type": "CUSTOM", "name": "card", "value": card})
+                                proposal = proposal_for(text)
+                                if proposal:
+                                    yield _sse({"type": "CUSTOM", "name": "proposal", "value": proposal})
                         continue
                     chunk, meta = payload
                     if meta.get("langgraph_node") != "agent":
@@ -328,6 +334,33 @@ def create_app(
         return StreamingResponse(
             events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
         )
+
+    async def _decide(proposal_id: UUID, approve: bool, authorization: str | None):
+        if settings.missing():
+            return JSONResponse({"error": "The coach service is not configured."}, status_code=503)
+        client: httpx.AsyncClient = state["http"]
+        try:
+            _, token = await authenticate(authorization, settings.supabase_url, settings.supabase_key, client)
+        except AuthError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=401)
+        sb = UserSupabase(settings.supabase_url, settings.supabase_key, token, client)
+        try:
+            row = await decide(sb, str(proposal_id), approve)
+        except SupabaseError as exc:
+            log.warning("proposal decision failed: %s", exc)
+            return JSONResponse({"error": "Couldn't record your decision. Try again in a moment."}, status_code=502)
+        if row is None:
+            return JSONResponse({"error": "That proposal wasn't found."}, status_code=404)
+        # status says how it ended: applied, rejected, expired, failed, or what it already was if decided twice
+        return {"id": row["id"], "status": row["status"], "decided_at": row.get("decided_at")}
+
+    @app.post("/proposals/{proposal_id}/approve")
+    async def approve_proposal(proposal_id: UUID, authorization: str | None = Header(default=None)):
+        return await _decide(proposal_id, True, authorization)
+
+    @app.post("/proposals/{proposal_id}/reject")
+    async def reject_proposal(proposal_id: UUID, authorization: str | None = Header(default=None)):
+        return await _decide(proposal_id, False, authorization)
 
     @app.post("/internal/weekly-run", status_code=202)
     async def weekly_run(
