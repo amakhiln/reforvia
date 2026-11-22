@@ -47,6 +47,21 @@ class UserSupabase:
         """Inserts a row; returns False (instead of raising) if a unique constraint says it already exists."""
         return await self._insert(table, row, allow_conflict=True)
 
+    async def upsert(self, table: str, row: dict[str, Any], on_conflict: str) -> None:
+        """Inserts a row, or replaces the existing one with the same on_conflict column."""
+        try:
+            resp = await self._http.post(
+                f"{self._base}/rest/v1/{table}",
+                params={"on_conflict": on_conflict},
+                headers={**self._headers, "Prefer": "resolution=merge-duplicates,return=minimal", "Content-Type": "application/json"},
+                json=row,
+                timeout=15,
+            )
+        except httpx.HTTPError as exc:
+            raise SupabaseError(f"Could not reach the database ({type(exc).__name__}).") from exc
+        if resp.status_code >= 400:
+            raise SupabaseError(f"Database write failed ({resp.status_code}).")
+
     async def delete(self, table: str, params: dict[str, str]) -> None:
         await self._request("DELETE", table, params=params)
 

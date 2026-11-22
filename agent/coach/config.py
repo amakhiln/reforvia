@@ -32,6 +32,8 @@ class Settings:
     max_output_tokens: int = field(default_factory=lambda: _int("COACH_MAX_OUTPUT_TOKENS", 4096))
     # Next-step chips under each reply come from a second, cheap model call. COACH_SUGGESTIONS=off turns them off.
     suggestions: bool = field(default_factory=lambda: os.environ.get("COACH_SUGGESTIONS", "on").strip().lower() not in ("off", "0", "false", "no"))
+    # The same small model also keeps the rolling chat summary. COACH_SUMMARY=off turns that off.
+    chat_summary: bool = field(default_factory=lambda: os.environ.get("COACH_SUMMARY", "on").strip().lower() not in ("off", "0", "false", "no"))
     suggest_model: str = field(default_factory=lambda: os.environ.get("COACH_SUGGEST_MODEL", "anthropic/claude-haiku-5.5"))
     daily_message_limit: int = field(default_factory=lambda: _int("DAILY_MESSAGE_LIMIT", 30))
     rate_per_minute: int = field(default_factory=lambda: _int("COACH_RATE_PER_MINUTE", 6))  # messages per user per minute; 0 turns it off

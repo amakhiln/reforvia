@@ -13,6 +13,7 @@ from langgraph.prebuilt import ToolNode, tools_condition
 
 from .memory import memory_block
 from .prompts import build_system_prompt
+from .summary import summary_block
 from .tools import TOOLS
 
 
@@ -25,7 +26,8 @@ def build_graph(model: BaseChatModel):
             today = datetime.now(ZoneInfo(tz)).date()
         except Exception:
             tz, today = "UTC", datetime.utcnow().date()
-        notes = memory_block((config.get("configurable") or {}).get("memories") or [])
+        cfg = config.get("configurable") or {}
+        notes = memory_block(cfg.get("memories") or []) + summary_block(cfg.get("summary") or "")
         messages = [SystemMessage(content=build_system_prompt(today, tz, notes)), *state["messages"]]
         return {"messages": [await llm.ainvoke(messages, config)]}
 
