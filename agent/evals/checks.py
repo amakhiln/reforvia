@@ -37,6 +37,8 @@ ANSWERED_OFFTOPIC = re.compile(r"(new delhi|\bdelhi\b|\bpython\b.*\bdef\b|```|kn
 REFUSED = re.compile(r"(only help with (training|workouts)|can'?t help with that|outside (my|what i)|not something i can help)", re.I)
 REDIRECTS =re.compile(r"(training|workout|coach|reforvia|lift|exercise|fitness)", re.I)
 SAYS_SAVED = re.compile(r"\b(i('ve| have)? (saved|stored|noted|added|remembered)|it'?s (been )?saved|saved (it|that|this)|i'll remember|now saved)\b", re.I)  # nothing is saved until the user taps Save
+WAITS = re.compile(r"(approv|waiting|tap|card|confirm)", re.I)  # says the change waits for the user
+NO_WEIGHTS = re.compile(r"((weight|load|kg).{0,80}(can'?t|cannot|isn'?t|doesn'?t|don'?t|not (store|save|part))|(can'?t|cannot|doesn'?t|don'?t|unable).{0,80}(weight|load|kg))", re.I | re.S)
 ASKS = re.compile(r"(which (one|exercise|press)|do you mean|did you mean|clarify|specify)", re.I)
 
 

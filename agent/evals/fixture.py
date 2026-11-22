@@ -31,11 +31,13 @@ EXERCISES: dict[str, dict[str, Any]] = {
                 form_instructions="Hinge at the hips with a flat back, bar close to the legs.", common_mistakes="Rounding the back.", alternatives="Dumbbell RDL."),
     "shoulder": dict(name="Seated shoulder press", main_muscles="Anterior and lateral deltoids; triceps", purpose="Builds the shoulders.",
                      form_instructions="Press overhead without arching the back.", common_mistakes="Excessive back arch.", alternatives="Landmine press."),
+    "hipthrust": dict(name="Hip thrust", main_muscles="Gluteus maximus; hamstrings", purpose="Builds the glutes.",
+                      form_instructions="Upper back on a bench, drive the hips up, pause at the top.", common_mistakes="Overarching the lower back.", alternatives="Glute bridge."),
     "lunge": dict(name="Walking lunge", main_muscles="Quadriceps; gluteus maximus", purpose="Builds single-leg strength.",
                   form_instructions="Long step, back knee toward the floor, drive through the front heel.", common_mistakes="Short steps.", alternatives="Split squat."),
 }
 for k, v in EXERCISES.items():
-    v.update(id=f"ex-{k}", video_url=None)
+    v.update(id=f"ex-{k}", video_url=None, is_timed=False)
 
 # (session, ISO weekday 1..7, [(exercise, sets, rep_target, rep_min, rep_max)])
 PLAN = [
@@ -157,8 +159,10 @@ class Fixture:
         return [dict(id="11111111-1111-4111-8111-111111111111", kind="fact", text="Trains 4 days a week, Monday to Thursday")]
 
     def _t_program_sessions(self, _: dict) -> list[dict]:
-        return [dict(name=n, day_of_week=d, is_optional=False, sort_order=0,
-                     planned_exercises=[dict(planned_sets=s, rep_target=t, sort_order=i, exercises=dict(name=EXERCISES[k]["name"])) for i, (k, s, t, *_r) in enumerate(items)])
+        return [dict(id=f"s-{d}", name=n, day_of_week=d, is_optional=False, sort_order=0,
+                     planned_exercises=[dict(id=f"p-{d}-{i}", exercise_id=EXERCISES[k]["id"], planned_sets=s, rep_target=t, rep_min=lo, rep_max=hi,
+                                             per_side=False, is_timed=False, sort_order=i, exercises=dict(name=EXERCISES[k]["name"]))
+                                        for i, (k, s, t, lo, hi) in enumerate(items)])
                 for n, d, items in PLAN]
 
     def _t_workouts(self, params: dict) -> list[dict]:

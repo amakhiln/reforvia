@@ -38,6 +38,8 @@ const TOOL_LABELS: Record<string, string> = {
   get_exercise_progress: "Analysing your progress",
   get_weekly_volume: "Checking your weekly volume",
   get_personal_bests: "Checking your personal bests",
+  propose_memory: "Preparing a note to save",
+  propose_plan_change: "Preparing a plan change",
 };
 
 /** The server speaks AG-UI (docs.ag-ui.com). This keeps the page on a small set of events it cares about. */
