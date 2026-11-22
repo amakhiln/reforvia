@@ -48,6 +48,8 @@ Keep it for running the agents (the tool loop, a supervisor later). Do **not** u
 
 ## Phase 4: plan changes (migration)
 
+*Built on branch `coach-plan-changes`: migration 0018 (`apply_plan_change`), `coach/planchange.py`, the `propose_plan_change` tool, prompt rules and eval cases. The approval card from phase 2 is reused unchanged.*
+
 - Tool `propose_plan_change` validates against your data and stores a proposal: add an exercise to a session, replace an exercise, or change sets or rep range. Up to 5 changes per proposal, applied all or nothing.
 - SQL function `apply_plan_change` re-checks and applies in one transaction. It runs under your own login, so row-level security applies.
 - Rules: library exercises only, your active program only, sets 1 to 10, sane rep ranges, counts against the existing rate limits.

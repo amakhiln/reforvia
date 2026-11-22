@@ -12,6 +12,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
 from .memory import KINDS, resolve
+from .planchange import PlanChange, build_plan_change
 from .progression import suggest_next
 from .proposals import create_proposal
 from .supa import SupabaseError, UserSupabase
@@ -248,7 +249,18 @@ async def propose_memory(text: str, kind: str = "fact", replaces: str = "", conf
     return _json({"proposal": card, "message": "Shown to the user as a card. It is NOT saved until they tap Save, so tell them it is waiting for their approval."})
 
 
-TOOLS = [propose_memory, get_my_plan, get_recent_workouts, find_exercise, get_exercise_guide, get_exercise_progress, get_weekly_volume, get_personal_bests]
+@tool
+async def propose_plan_change(changes: list[PlanChange], config: RunnableConfig = None) -> str:  # type: ignore[assignment]
+    """Offer a change to the user's weekly plan: add an exercise to a session, replace one exercise with another, or edit the sets or rep range of one. Up to 5 changes, applied together. This only shows the user an Approve button; the plan is not changed until they approve it. It cannot remove or reorder exercises, create days or sessions, or set weights."""
+    built = await build_plan_change(_sb(config), changes)
+    if isinstance(built, str):
+        return _json({"error": built})
+    payload, summary, preview = built
+    card = await create_proposal(_sb(config), config["configurable"]["user_id"], "plan_change", payload, summary, preview)
+    return _json({"proposal": card, "message": "Shown to the user as a card. The plan is NOT changed until they tap Approve, so tell them it is waiting for their approval."})
+
+
+TOOLS = [propose_plan_change, propose_memory, get_my_plan, get_recent_workouts, find_exercise, get_exercise_guide, get_exercise_progress, get_weekly_volume, get_personal_bests]
 
 TOOL_LABELS = {
     "get_my_plan": "Checking your plan",
@@ -259,4 +271,5 @@ TOOL_LABELS = {
     "get_weekly_volume": "Checking your weekly volume",
     "get_personal_bests": "Checking your personal bests",
     "propose_memory": "Preparing a note to save",
+    "propose_plan_change": "Preparing a plan change",
 }
