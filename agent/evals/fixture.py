@@ -183,9 +183,16 @@ class Fixture:
         return httpx.Response(200, json=getattr(self, f"_t_{table}")(params))
 
     def search_foods(self, q: str, lim: int) -> list[dict]:
-        q = q.strip().lower()
-        hits = [f for f in FOODS if len(q) >= 2 and q in (f["name"] + " " + f["local_names"]).lower()]
-        return sorted(hits, key=lambda f: (f["name"].lower() != q, len(f["name"])))[:lim]
+        """Like the SQL function: every word is looked for in the English and regional names; more matches first."""
+        toks = [re.sub(r"[^a-z0-9]", "", t) for t in q.lower().split()[:5]]
+        toks = [t for t in toks if len(t) >= 2]
+        scored = []
+        for f in FOODS:
+            hay, name = (f["name"] + " " + f["local_names"]).lower(), f["name"].lower()
+            matched = sum(t in hay for t in toks)
+            if matched:
+                scored.append((-matched, -sum(re.search(rf"\b{t}\b", name) is not None for t in toks), len(name), f))
+        return [f for *_k, f in sorted(scored, key=lambda x: x[:3])][: max(1, min(lim, 20))]
 
     def _t_foods(self, params: dict) -> list[dict]:
         code = params.get("code", "").removeprefix("eq.")

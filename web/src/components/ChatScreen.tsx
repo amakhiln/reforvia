@@ -10,11 +10,11 @@ import { CoachCardView } from "@/components/CoachCards";
 import { ProposalCard } from "@/components/ProposalCard";
 import { SuggestionChips } from "@/components/SuggestionChips";
 import { RichText } from "@/components/RichText";
+import { groupSteps, type Step } from "@/lib/steps";
 import { COACH_URL, CoachHttpError, decideProposal, pingCoach, streamCoach, type CoachCard, type CoachProposal } from "@/lib/coach";
 import { getSupabase } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
-type Step = { id: string; label: string; done: boolean };
 // steps and cards belong to the reply being streamed; they are not stored, so they show for this visit only
 type Msg = { id: string; role: "user" | "assistant"; content: string; failed?: boolean; steps?: Step[]; cards?: CoachCard[] };
 
@@ -316,10 +316,11 @@ export function ChatScreen({ agent, title, subtitle, heading, intro, starters, p
           <div key={m.id} className={m.role === "user" ? "flex justify-end" : "flex flex-col items-start gap-2"}>
             {m.steps && m.steps.length > 0 && (
               <ul aria-label="What the coach looked at" className="flex max-w-[88%] flex-wrap gap-1.5">
-                {m.steps.map((t) => (
-                  <li key={t.id} className="tag flex items-center gap-1.5 rounded-lg border border-line px-2 py-1 text-muted">
+                {groupSteps(m.steps).map((t) => (
+                  <li key={t.label} className="tag flex items-center gap-1.5 rounded-lg border border-line px-2 py-1 text-muted">
                     <span className={`size-1.5 rounded-full ${t.done ? "bg-accent" : "animate-pulse bg-muted"}`} aria-hidden />
                     {t.label}
+                    {t.count > 1 && <span className="font-mono text-ink">×{t.count}</span>}
                   </li>
                 ))}
               </ul>

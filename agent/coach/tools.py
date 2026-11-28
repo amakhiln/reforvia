@@ -2,6 +2,7 @@
 except propose_memory, which stores a proposal the user must approve before anything is saved."""
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from datetime import datetime
@@ -278,12 +279,18 @@ async def get_nutrition_targets(config: RunnableConfig = None) -> str:  # type: 
 
 @tool
 async def search_foods(query: str, limit: int = 5, config: RunnableConfig = None) -> str:  # type: ignore[assignment]
-    """Find foods in the Indian Food Composition Tables by English, regional or scientific name (e.g. 'atta', 'chana', 'egg'). Returns values per 100 g of the food as listed. The tables hold raw ingredients, not cooked dishes."""
-    rows = await _sb(config).rpc("search_foods", {"q": (query or "")[:60], "lim": max(1, min(int(limit), 8))}) or []
-    foods = [{k: r[k] for k in FOOD_FIELDS.split(",")} for r in rows]
-    if not foods:
-        return _json({"foods": [], "message": "No match. Try another name, or a simpler one. Cooked dishes are not in the tables: use their raw ingredients."})
-    return _json({"per": "100 g of the food as listed", "foods": foods})
+    """Find foods in the Indian Food Composition Tables by English or regional name, one or more words (e.g. 'atta', 'chana dal', 'chicken breast'). To look up several foods in ONE call, separate the names with semicolons (e.g. 'milk; rice; sugar'). Returns values per 100 g of the food as listed. The tables hold raw ingredients, not cooked dishes, so never search for a dish by name."""
+    sb = _sb(config)
+    names = [n.strip()[:60] for n in (query or "").split(";") if n.strip()][:5]
+    n = max(1, min(int(limit), 8))
+    found = await asyncio.gather(*[sb.rpc("search_foods", {"q": name, "lim": n}) for name in names]) if names else []
+    groups = [{"query": name, "foods": [{k: r[k] for k in FOOD_FIELDS.split(",")} for r in (rows or [])]} for name, rows in zip(names, found)]
+    if not any(g["foods"] for g in groups):
+        return _json({"foods": [], "message": "No match. You may try one different name (a regional name such as arhar, chana or atta often works). Cooked dishes are not in the tables: use their raw ingredients. If it is still not found, say so."})
+    per = "100 g of the food as listed"
+    if len(groups) == 1:
+        return _json({"per": per, "foods": groups[0]["foods"]})
+    return _json({"per": per, "results": groups, "message": "Foods with no matches are not in the tables: say so for those."})
 
 
 @tool
