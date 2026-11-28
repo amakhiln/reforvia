@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseRepTarget, replacementPatch } from "./repTarget.ts";
+import { parseRepTarget, replacementPatch, parseSetsReps } from "./repTarget.ts";
 
 test("parses ranges, single numbers, per-side and timed targets", () => {
   assert.deepEqual(parseRepTarget("8–12"), { rep_min: 8, rep_max: 12, per_side: false, is_timed: false });
@@ -25,4 +25,12 @@ test("swapping like for like keeps sets and reps; timed and untimed resets the t
   assert.deepEqual(replacementPatch({ is_timed: false }, { id: "y", is_timed: true }), {
     exercise_id: "y", is_timed: true, per_side: false, rep_target: "30–45 sec", rep_min: 30, rep_max: 45,
   });
+});
+
+test("a sets and reps edit is accepted only with 1 to 10 sets and a number of reps", () => {
+  assert.deepEqual(parseSetsReps("4", " 6–10 / side "), { planned_sets: 4, rep_target: "6–10 / side", rep_min: 6, rep_max: 10, per_side: true, is_timed: false });
+  assert.equal(parseSetsReps("0", "8"), null);
+  assert.equal(parseSetsReps("11", "8"), null);
+  assert.equal(parseSetsReps("2.5", "8"), null);
+  assert.equal(parseSetsReps("3", "lots"), null);
 });

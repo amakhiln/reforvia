@@ -36,14 +36,18 @@ def suggest_next(planned_sets: int, rep_min: int | None, rep_max: int | None, pr
         }
 
     lowest = min(s["reps"] or 0 for s in working)
-    target = min(rep_max, lowest + 1)
+    target = max(rep_min, min(rep_max, lowest + 1))  # history can come from another rep range
+    if lowest + 1 < rep_min:
+        at = f" at {_fmt(top_load)} kg" if top_load > 0 else ""
+        lighter = f", and go lighter if you can't reach {rep_min}" if top_load > 0 else ""
+        message = f"Last time was {lowest} reps{at}. Aim for {rep_min} to {rep_max}{lighter}."
+    elif top_load > 0:
+        message = f"Stay at {_fmt(top_load)} kg and aim for {target} reps on every set. Reach {rep_max} on all sets to move up."
+    else:
+        message = f"Aim for {target} reps on every set. Reach {rep_max} on all sets to add load."
     return {
         "kind": "hold",
         "next_load_kg": top_load if top_load > 0 else None,
         "target_reps": target,
-        "message": (
-            f"Stay at {_fmt(top_load)} kg and aim for {target} reps on every set. Reach {rep_max} on all sets to move up."
-            if top_load > 0
-            else f"Aim for {target} reps on every set. Reach {rep_max} on all sets to add load."
-        ),
+        "message": message,
     }

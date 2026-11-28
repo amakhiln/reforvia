@@ -9,6 +9,15 @@ export function parseRepTarget(text: string) {
   return { rep_min, rep_max, per_side: lower.includes("side"), is_timed: /sec|min/.test(lower) };
 }
 
+/** A sets and reps edit as typed, ready to save on a plan row; null if either is not valid. */
+export function parseSetsReps(sets: string, reps: string) {
+  const n = Number(sets);
+  const parsed = parseRepTarget(reps);
+  return Number.isInteger(n) && n >= 1 && n <= 10 && parsed ? { planned_sets: n, rep_target: reps.trim(), ...parsed } : null;
+}
+
+export const SETS_REPS_HELP = "Sets must be 1–10 and reps need a number, like 8–12.";
+
 export const defaultRep = (timed: boolean) =>
   timed ? { rep_target: "30–45 sec", rep_min: 30, rep_max: 45 } : { rep_target: "8–12", rep_min: 8, rep_max: 12 };
 

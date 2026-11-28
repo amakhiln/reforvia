@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { BookIcon, CheckIcon, ChevronIcon, ExternalIcon, PlusIcon } from "./icons";
+import { BookIcon, CheckIcon, ChevronIcon, ExternalIcon, PencilIcon, PlusIcon } from "./icons";
+import { ExerciseEditor, type ExerciseEdits } from "./ExerciseEditor";
 import { ExerciseMedia } from "./ExerciseMedia";
 import { SetRow, type SetValues } from "./SetRow";
 import { formatShortDate } from "@/lib/dates";
 import { formatKg, placeholderForSet, suggestNext } from "@/lib/progression";
+import { defaultRep } from "@/lib/repTarget";
 import type { PreviousSet, WorkoutExercise } from "@/lib/types";
 
 type Props = {
@@ -20,6 +22,7 @@ type Props = {
   onRir: (rir: number | null) => Promise<void>;
   onToggleDone: () => Promise<void>;
   onNotes: (notes: string) => Promise<void>;
+  edits: ExerciseEdits;
 };
 
 export function ExerciseCard(props: Props) {
@@ -27,8 +30,11 @@ export function ExerciseCard(props: Props) {
   const planned = item.planned_exercises;
   const ex = item.exercises;
   const timed = planned?.is_timed ?? ex.is_timed;
-  const timedUnit: "sec" | "min" = planned?.rep_target.toLowerCase().includes("min") ? "min" : "sec";
-  const plannedSets = planned?.planned_sets ?? 3;
+  // Exercises outside the plan (added or swapped today) use the default targets, so they get suggestions too.
+  const target = planned ?? { planned_sets: 3, per_side: false, ...defaultRep(timed) };
+  const timedUnit: "sec" | "min" = target.rep_target.toLowerCase().includes("min") ? "min" : "sec";
+  const plannedSets = target.planned_sets;
+  const [editing, setEditing] = useState(false);
 
   const logsByNumber = useMemo(() => new Map(item.set_logs.map((s) => [s.set_number, s])), [item.set_logs]);
   const maxLogged = item.set_logs.reduce((m, s) => Math.max(m, s.set_number), 0);
@@ -40,11 +46,11 @@ export function ExerciseCard(props: Props) {
     () =>
       suggestNext({
         plannedSets,
-        repMin: planned?.rep_min ?? null,
-        repMax: planned?.rep_max ?? null,
+        repMin: target.rep_min,
+        repMax: target.rep_max,
         previous: previous.map((p) => ({ load_kg: p.load_kg, reps: p.reps })),
       }),
-    [plannedSets, planned?.rep_min, planned?.rep_max, previous],
+    [plannedSets, target.rep_min, target.rep_max, previous],
   );
 
   const lastSummary = useMemo(() => {
@@ -60,17 +66,17 @@ export function ExerciseCard(props: Props) {
   }, [previous, timed]);
 
   const done = item.completed;
-  const targetLabel = planned ? `${planned.planned_sets} × ${planned.rep_target}` : "";
 
   return (
     <section
       className={`overflow-hidden rounded-2xl border bg-surface ${done ? "border-accent/40" : "border-line"}`}
       aria-label={ex.name}
     >
+      <div className="flex items-center">
       <button
         onClick={props.onToggleOpen}
         aria-expanded={open}
-        className="flex w-full items-center gap-3 px-4 py-4 text-left"
+        className="flex min-w-0 flex-1 items-center gap-3 py-4 pl-4 pr-2 text-left"
       >
         <span
           className={`flex size-7 shrink-0 items-center justify-center rounded-full ${
@@ -80,14 +86,27 @@ export function ExerciseCard(props: Props) {
           <CheckIcon className="size-4" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-base font-semibold uppercase tracking-wide">{ex.name}</span>
+          <span className="line-clamp-2 text-base font-semibold uppercase tracking-wide">{ex.name}</span>
           <span className="tag mt-1 block text-muted">
-            {targetLabel}
-            {planned?.per_side ? "" : ""} · {loggedCount}/{plannedSets} sets
+            {plannedSets} × {target.rep_target} · {loggedCount}/{plannedSets} sets
           </span>
         </span>
+      </button>
+      <button
+        onClick={() => setEditing((e) => !e)}
+        aria-expanded={editing}
+        aria-label={`Edit ${ex.name}`}
+        className="flex size-11 shrink-0 items-center justify-center rounded-xl text-muted aria-expanded:bg-surface-2 aria-expanded:text-accent"
+      >
+        <PencilIcon className="size-4" />
+      </button>
+      {/* a larger target for the pointer only: the title button already opens the card for keyboard and screen readers */}
+      <button onClick={props.onToggleOpen} tabIndex={-1} aria-hidden className="flex h-11 w-12 shrink-0 items-center justify-center">
         <ChevronIcon className={`text-muted transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
+      </div>
+
+      {editing && <ExerciseEditor item={item} {...props.edits} onClose={() => setEditing(false)} />}
 
       {open && (
         <div className="space-y-4 border-t border-line px-4 pb-4 pt-4">
@@ -110,22 +129,23 @@ export function ExerciseCard(props: Props) {
           <div>
             <div className="mb-2 flex items-center gap-2 pl-11 pr-14 tag text-muted">
               {timed ? (
-                <span className="flex-1 text-center">{timedUnit === "min" ? "Minutes" : "Seconds"}{planned?.per_side ? " / side" : ""}</span>
+                <span className="flex-1 text-center">{timedUnit === "min" ? "Minutes" : "Seconds"}{target.per_side ? " / side" : ""}</span>
               ) : (
                 <>
                   <span className="flex-1 text-center">Kg</span>
-                  <span className="flex-1 text-center">Reps{planned?.per_side ? " / side" : ""}</span>
+                  <span className="flex-1 text-center">Reps{target.per_side ? " / side" : ""}</span>
                 </>
               )}
             </div>
             <div className="space-y-2">
               {Array.from({ length: rows }, (_, i) => i + 1).map((n) => {
                 const ph = timed
-                  ? { load: null, reps: planned?.rep_min ?? null }
+                  ? { load: null, reps: target.rep_min }
                   : placeholderForSet(
                       n,
                       suggestion,
                       previous.map((p) => ({ load_kg: p.load_kg, reps: p.reps })),
+                      item.set_logs,
                     );
                 return (
                   <SetRow

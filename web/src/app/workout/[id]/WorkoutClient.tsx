@@ -10,11 +10,12 @@ import { ExercisePicker, type Found } from "@/components/ExercisePicker";
 import { RestTimer } from "@/components/RestTimer";
 import type { SetValues } from "@/components/SetRow";
 import { formatLongDate } from "@/lib/dates";
-import { defaultRep } from "@/lib/repTarget";
+import { defaultRep, replacementPatch } from "@/lib/repTarget";
 import { defaultRestSeconds } from "@/lib/progression";
 import { getSupabase } from "@/lib/supabase/client";
 import { fetchBundle, takeBundle, type WorkoutBundle } from "@/lib/workoutBundle";
 import type { PreviousSet, SetLog, Workout, WorkoutExercise } from "@/lib/types";
+import { hasRecord, insertedAfter, moved, planSlot, resequence, swapSource, type PlanRow } from "@/lib/workoutEdit";
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : ((e as { message?: string })?.message ?? "Unknown error"));
 
@@ -272,6 +273,132 @@ export function WorkoutClient() {
     }
   }
 
+  // ---- editing an exercise from the logging screen ----
+
+  async function saveOrder(ordered: { id: string; sort_order: number }[]) {
+    const results = await Promise.all(
+      resequence(ordered).map((r) => getSupabase().from("workout_exercises").update({ sort_order: r.sort_order }).eq("id", r.id)),
+    );
+    const failed = results.find((r) => r.error);
+    if (failed) throw failed.error;
+  }
+
+  async function reload() {
+    apply(await fetchBundle(id));
+  }
+
+  /** Runs one edit; on failure says so and shows what was actually saved. */
+  async function editing(what: string, fn: () => Promise<void>): Promise<boolean> {
+    try {
+      await fn();
+      return true;
+    } catch (e) {
+      flash(`Couldn’t ${what}: ${msg(e)}`);
+      await reload().catch(() => {});
+      return false;
+    }
+  }
+
+  const swap = (item: WorkoutExercise) => (ex: Found, alsoPlan: boolean) =>
+    editing("swap exercise", async () => {
+      if (!userId.current || !workout || !items) throw new Error("You’re signed out. Please sign in again.");
+      const sb = getSupabase();
+      const { data, error } = await sb
+        .from("planned_exercises")
+        .select("*, program_sessions!inner(programs!inner(is_active))")
+        .eq("user_id", userId.current)
+        .eq("exercise_id", ex.id)
+        .eq("program_sessions.programs.is_active", true)
+        .order("id");
+      if (error) throw error;
+      const rows = (data ?? []) as PlanRow[];
+      const slot = planSlot(item.planned_exercises, workout.session_id);
+      const source = swapSource(ex, rows, item.planned_exercises, workout.session_id);
+      const keepOld = hasRecord(item);
+      const link = { exercise_id: ex.id, planned_exercise_id: source?.id ?? null };
+
+      let targetId = item.id;
+      if (keepOld) {
+        const { data: added, error: addErr } = await sb
+          .from("workout_exercises")
+          .insert({ workout_id: id, user_id: userId.current, sort_order: item.sort_order + 1, ...link })
+          .select("id")
+          .single();
+        if (addErr) throw addErr;
+        targetId = added.id;
+        await saveOrder(insertedAfter(items, item.id, { ...item, id: targetId, sort_order: item.sort_order + 1 }));
+        const { error: doneErr } = await sb.from("workout_exercises").update({ completed: true }).eq("id", item.id);
+        if (doneErr) throw doneErr;
+      } else {
+        const { error: upErr } = await sb.from("workout_exercises").update({ ...link, completed: false }).eq("id", item.id);
+        if (upErr) throw upErr;
+      }
+
+      let note = `Swapped to ${ex.name}`;
+      if (alsoPlan && slot) {
+        // Best effort, after today's workout is already right.
+        if (rows.some((r) => r.session_id === workout.session_id && r.id !== slot.id)) {
+          note += ". Plan unchanged: it already has that exercise on this day";
+        } else {
+          const patch = source
+            ? {
+                exercise_id: ex.id,
+                planned_sets: source.planned_sets,
+                rep_target: source.rep_target,
+                rep_min: source.rep_min,
+                rep_max: source.rep_max,
+                per_side: source.per_side,
+                is_timed: source.is_timed,
+              }
+            : replacementPatch(slot, ex);
+          const { error: planErr } = await sb.from("planned_exercises").update(patch).eq("id", slot.id);
+          if (planErr) note += ", but your plan couldn’t be changed";
+          else {
+            await sb.from("workout_exercises").update({ planned_exercise_id: slot.id }).eq("id", targetId);
+            // the finished row no longer stands in that place in the plan
+            if (keepOld) await sb.from("workout_exercises").update({ planned_exercise_id: null }).eq("id", item.id);
+            note += " here and in your plan";
+          }
+        }
+      }
+      await reload();
+      setOpenId(targetId);
+      flash(note, "success");
+    });
+
+  const move = (item: WorkoutExercise) => (dir: -1 | 1) =>
+    editing("move exercise", async () => {
+      const next = moved(items ?? [], item.id, dir);
+      if (!next) return;
+      await saveOrder(next);
+      await reload();
+    });
+
+  const remove = (item: WorkoutExercise) => (alsoPlan: boolean) =>
+    editing("remove exercise", async () => {
+      const sb = getSupabase();
+      const { error } = await sb.from("workout_exercises").delete().eq("id", item.id); // its sets go with it
+      if (error) throw error;
+      let note = `${item.exercises.name} removed`;
+      if (alsoPlan && item.planned_exercises) {
+        const { error: planErr } = await sb.from("planned_exercises").delete().eq("id", item.planned_exercises.id);
+        note += planErr ? ", but your plan couldn’t be changed" : " here and from your plan";
+      }
+      await reload();
+      flash(note, "success");
+    });
+
+  const setTargets = (item: WorkoutExercise) => (patch: Omit<PlanRow, "id" | "session_id" | "exercise_id">) =>
+    editing("save sets and reps", async () => {
+      const planned = item.planned_exercises;
+      if (!planned) return;
+      const { error } = await getSupabase().from("planned_exercises").update(patch).eq("id", planned.id);
+      if (error) throw error;
+      if (item.set_logs.length) await syncCompleted({ ...item, planned_exercises: { ...planned, ...patch } }, item.set_logs);
+      await reload();
+      flash("Plan saved", "success");
+    });
+
   async function resetWorkout() {
     setResetting(true);
     const { error } = await getSupabase().from("workouts").delete().eq("id", id); // sets and exercises go with it
@@ -320,9 +447,9 @@ export function WorkoutClient() {
             </div>
           </div>
 
-          {items.map((item) => (
+          {items.map((item, index) => (
             <ExerciseCard
-              key={item.id}
+              key={`${item.id}:${item.exercise_id}`} // a swap starts the card afresh
               item={item}
               previous={previous[item.exercise_id] ?? []}
               open={openId === item.id}
@@ -333,6 +460,16 @@ export function WorkoutClient() {
               onRir={setRir(item)}
               onToggleDone={toggleDone(item)}
               onNotes={saveNotes(item)}
+              edits={{
+                sessionId: workout.session_id,
+                first: index === 0,
+                last: index === items.length - 1,
+                takenIds: items.map((i) => i.exercise_id),
+                onSwap: swap(item),
+                onMove: move(item),
+                onRemove: remove(item),
+                onTargets: setTargets(item),
+              }}
             />
           ))}
 

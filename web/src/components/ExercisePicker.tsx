@@ -12,7 +12,7 @@ const COLS = "id,name,main_muscles,equipment,is_timed,source,exercise_media(id)"
 type Row = Ex & { exercise_media?: { id: string }[] };
 
 /** Candidates for alternatives: exercises that train the same muscle groups, widened if that finds too few. */
-async function loadSuggestions(cur: Ex, exclude: string[]): Promise<Found[]> {
+async function loadSuggestions(cur: Ex, exclude: string[], otherKit: boolean): Promise<Found[]> {
   const sb = getSupabase();
   const terms = muscleGroups(cur.main_muscles).slice(0, 2).flatMap(groupTerms);
   let rows: Row[] = [];
@@ -26,7 +26,7 @@ async function loadSuggestions(cur: Ex, exclude: string[]): Promise<Found[]> {
     rows = [...rows, ...((data ?? []) as unknown as Row[]).filter((r) => !have.has(r.id))];
   }
   const pool: Ex[] = rows.map((r) => ({ ...r, media_count: r.exercise_media?.length ?? 0 }));
-  return suggestAlternatives(cur, pool, exclude, 4).map((e) => ({
+  return suggestAlternatives(cur, pool, exclude, 4, otherKit).map((e) => ({
     id: e.id, name: e.name, main_muscles: e.main_muscles, is_timed: e.is_timed, source: e.source ?? "curated",
   }));
 }
@@ -37,23 +37,26 @@ export function ExercisePicker({
   onCancel,
   suggestFor,
   exclude,
+  otherKit = false,
 }: {
   onPick: (ex: Found) => Promise<void>;
   onCancel: () => void;
   suggestFor?: Ex;
   exclude?: string[];
+  /** Suggest exercises that need other equipment first. */
+  otherKit?: boolean;
 }) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<Found[]>([]);
   const [suggested, setSuggested] = useState<Found[] | null>(null);
   const [busy, setBusy] = useState(false);
   const seq = useRef(0);
-  const [seed] = useState({ suggestFor, exclude: exclude ?? [] });
+  const [seed] = useState({ suggestFor, exclude: exclude ?? [], otherKit });
 
   useEffect(() => {
     if (!seed.suggestFor) return;
     let live = true;
-    loadSuggestions(seed.suggestFor, seed.exclude).then(
+    loadSuggestions(seed.suggestFor, seed.exclude, seed.otherKit).then(
       (r) => live && setSuggested(r),
       () => live && setSuggested([]),
     );

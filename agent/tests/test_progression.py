@@ -30,3 +30,9 @@ def test_only_sets_at_top_load_count():
 
 def test_increments():
     assert load_increment(5) == 1 and load_increment(20) == 2.5 and load_increment(100) == 5
+
+
+def test_below_the_range_targets_the_bottom_and_advises_going_lighter():
+    s = suggest_next(3, 10, 15, sets(20, [6]))
+    assert s["kind"] == "hold" and s["target_reps"] == 10
+    assert "lighter" in s["message"]

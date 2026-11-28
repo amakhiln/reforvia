@@ -6,7 +6,7 @@ import { AppShell, ErrorNotice, InlineSpinner, Spinner } from "@/components/AppS
 import { ExercisePicker as Picker, type Found } from "@/components/ExercisePicker";
 import { ChevronIcon, CloseIcon, PlusIcon, SwapIcon } from "@/components/icons";
 import { DAY_NAMES } from "@/lib/dates";
-import { defaultRep, parseRepTarget, replacementPatch } from "@/lib/repTarget";
+import { defaultRep, parseSetsReps, replacementPatch, SETS_REPS_HELP } from "@/lib/repTarget";
 import { getSupabase } from "@/lib/supabase/client";
 
 type Item = {
@@ -216,16 +216,15 @@ function Row({
   const [busy, setBusy] = useState(false);
 
   async function commit() {
-    const n = Number(sets);
-    const parsed = parseRepTarget(reps);
-    if (!Number.isInteger(n) || n < 1 || n > 10 || !parsed) {
-      toast.error("Sets must be 1–10 and reps need a number, like 8–12.");
+    const patch = parseSetsReps(sets, reps);
+    if (!patch) {
+      toast.error(SETS_REPS_HELP);
       setSets(String(item.planned_sets));
       setReps(item.rep_target);
       return;
     }
-    if (n === item.planned_sets && reps.trim() === item.rep_target) return;
-    await onSave({ planned_sets: n, rep_target: reps.trim(), ...parsed });
+    if (patch.planned_sets === item.planned_sets && patch.rep_target === item.rep_target) return;
+    await onSave(patch);
   }
 
   async function guarded(fn: () => Promise<unknown>) {
