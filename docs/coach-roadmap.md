@@ -106,3 +106,7 @@ A third agent for food and targets, with its own prompt, tools and tab. Numbers 
 ## Weekly review to plan changes
 
 *Built on branch `coach-review-plan`, no migration.* The Coach can read the latest weekly review (`get_weekly_review`) and suggests changes tied to its numbers, proposing only when asked. A plan change shows in the chat as the whole day with the changed rows marked. The user can adjust it by chatting: the new preview replaces the waiting one, and only one plan change can be waiting at a time. Nothing applies until Approve. The review screen has a "Discuss with Coach" button that fills in the question without sending it.
+
+## Marking a day as skipped
+
+*Built on branch `skip-day`, migration 0026.* On the Today screen a planned session (today's, or an earlier day this week) can be marked "didn't train", with an optional reason (rest, busy, sick, injury, travel) and an undo. The weekly review lists it as skipped, not missed; the Coach sees it; doing the session later overrides the mark. Not built: marking days in past weeks, skips in History, moving a session to another day.

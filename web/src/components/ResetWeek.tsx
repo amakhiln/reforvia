@@ -11,7 +11,7 @@ type Kind = "logs" | "plan";
 const COPY: Record<Kind, { button: string; warn: string; confirm: string }> = {
   logs: {
     button: "Clear this week’s logs",
-    warn: "This permanently deletes every workout and set you logged since Monday. Your plan and older history stay.",
+    warn: "This permanently deletes every workout, set and skip mark since Monday. Your plan and older history stay.",
     confirm: "Delete this week’s logs",
   },
   plan: {
@@ -35,6 +35,8 @@ export function ResetWeek({ onDone }: { onDone: () => void }) {
           ? await sb.from("workouts").delete().gte("performed_on", startOfWeekISO())
           : await sb.rpc("reset_my_program");
       if (error) throw error;
+      // no error check: a database without the skip table has no marks to clear
+      if (kind === "logs") await sb.from("session_skips").delete().gte("skipped_on", startOfWeekISO());
       setPending(null);
       toast.success(kind === "logs" ? "This week’s logs cleared" : "Default plan restored");
       onDone();

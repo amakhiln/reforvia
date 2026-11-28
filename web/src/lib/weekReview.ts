@@ -2,14 +2,22 @@ import type { WeeklySummary } from "@/lib/types";
 
 type Stats = WeeklySummary["stats"];
 
-export type DayState = "trained" | "extra" | "missed" | "rest";
+export type DayState = "trained" | "extra" | "missed" | "skipped" | "rest";
 
 /** Monday to Sunday: trained on a planned day, trained on an unplanned day, planned but skipped, or rest.
  *  `missed` is the planned days really skipped (a session moved to another day is not a miss); older reviews lack it. */
-export function weekCells(trained: number[] = [], planned: number[] = [], missed: number[] = planned): { day: number; state: DayState }[] {
+export function weekCells(trained: number[] = [], planned: number[] = [], missed: number[] = planned, skipped: number[] = []): { day: number; state: DayState }[] {
   return [1, 2, 3, 4, 5, 6, 7].map((day) => ({
     day,
-    state: trained.includes(day) ? (planned.includes(day) ? "trained" : "extra") : missed.includes(day) ? "missed" : "rest",
+    state: trained.includes(day)
+      ? planned.includes(day)
+        ? "trained"
+        : "extra"
+      : skipped.includes(day)
+        ? "skipped"
+        : missed.includes(day)
+          ? "missed"
+          : "rest",
   }));
 }
 

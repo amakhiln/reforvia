@@ -1,6 +1,7 @@
 import { CheckIcon } from "@/components/icons";
 import { formatCompact } from "@/lib/chartMath";
 import { formatKg } from "@/lib/progression";
+import { reasonLabel } from "@/lib/skips";
 import type { WeeklySummary } from "@/lib/types";
 import { weekCells, wins, type DayState } from "@/lib/weekReview";
 
@@ -11,6 +12,7 @@ const CELL: Record<DayState, { box: string; label: string }> = {
   trained: { box: "bg-accent text-accent-ink", label: "trained" },
   extra: { box: "bg-accent-soft text-accent", label: "trained, not planned" },
   missed: { box: "border-2 border-dashed border-accent text-accent", label: "planned, skipped" },
+  skipped: { box: "border-2 border-dashed border-muted text-muted", label: "marked skipped" },
   rest: { box: "bg-surface-2 text-muted", label: "rest" },
 };
 
@@ -29,7 +31,8 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 export function WeekReview({ st }: { st: Stats }) {
   const delta =
     st.prev_volume_kg && st.volume_kg !== undefined ? Math.round(((st.volume_kg - st.prev_volume_kg) / st.prev_volume_kg) * 100) : null;
-  const cells = st.trained_days ? weekCells(st.trained_days, st.plan_days, st.missed_days) : null;
+  const cells = st.trained_days ? weekCells(st.trained_days, st.plan_days, st.missed_days, st.skipped_days) : null;
+  const skipped = (st.skipped_sessions ?? []).map((k) => (k.reason ? `${k.session} (${reasonLabel(k.reason)?.toLowerCase()})` : k.session));
   const done = st.planned_done; // undefined on reviews written before planned and extra sessions were counted apart
   const planned = st.plan_days?.length ?? 0;
   const hit = cells?.filter((c) => c.state === "trained").length ?? 0;
@@ -44,7 +47,7 @@ export function WeekReview({ st }: { st: Stats }) {
             {cells.map((c, i) => (
               <li key={c.day} aria-label={`${NAMES[i]}: ${CELL[c.state].label}`} className="flex flex-col items-center gap-1.5">
                 <span className={`flex size-9 items-center justify-center rounded-lg ${CELL[c.state].box}`}>
-                  {c.state === "trained" || c.state === "extra" ? <CheckIcon className="size-4" /> : null}
+                  {c.state === "trained" || c.state === "extra" ? <CheckIcon className="size-4" /> : c.state === "skipped" ? <span aria-hidden>–</span> : null}
                 </span>
                 <span className="tag text-muted">{LETTERS[i]}</span>
               </li>
@@ -52,12 +55,16 @@ export function WeekReview({ st }: { st: Stats }) {
           </ol>
           {st.missed_sessions && (st.planned_sessions ?? 0) > 0 && (
             <p className="mt-3 text-sm text-muted">
-              {st.missed_sessions.length === 0 ? (
-                "Every planned session done."
-              ) : (
-                <>
+              {st.missed_sessions.length === 0 && skipped.length === 0 && "Every planned session done."}
+              {st.missed_sessions.length > 0 && (
+                <span className="block">
                   Missed: <span className="font-semibold text-ink">{st.missed_sessions.join(", ")}</span>
-                </>
+                </span>
+              )}
+              {skipped.length > 0 && (
+                <span className="block">
+                  Skipped: <span className="font-semibold text-ink">{skipped.join(", ")}</span>
+                </span>
               )}
             </p>
           )}
