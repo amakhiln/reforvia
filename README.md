@@ -15,7 +15,10 @@ Mobile-first workout tracker, Reforvia (Next.js PWA + Supabase). Phases 1–4: p
    - `supabase/migrations/0007_reset_plan.sql` – "Restore default plan" (keeps your logged history)
    - `supabase/migrations/0008_exercise_media.sql` – exercise media table and the public `exercise-media` storage bucket
    - `supabase/migrations/0009`–`0012_wger_exercises_*.sql` – the wger exercise library (973 exercises, CC BY-SA / CC0, author kept per row). Run after 0008. Optional.
-3. **Authentication → Providers → Email**: for quick testing you can turn off "Confirm email". Leave it on for real use and add your site URL under **Authentication → URL Configuration** (also add `http://localhost:3000/auth/callback`).
+3. **Authentication → Providers → Email**: for quick testing you can turn off "Confirm email". Leave it on for real use, and set up sign-up emails:
+   - **Authentication → URL Configuration**: set **Site URL** to the live web address (`https://your-app.example`, not localhost). Under **Redirect URLs** add `https://your-app.example/auth/callback` and `http://localhost:3000/auth/callback`.
+   - **Authentication → Emails → SMTP Settings**: add your own SMTP provider. Supabase's built-in sender only delivers to your project's team members, allows very few emails an hour, and on new free projects does not let you edit templates.
+   - **Authentication → Emails → Templates → Confirm signup**: subject `Confirm your email for Reforvia`, body from `supabase/templates/confirm-signup.html`. Its link always points at the Site URL.
 4. **Project Settings → API**: copy the Project URL and the publishable (or anon) key.
    Never use the `service_role` / secret key in this app.
 

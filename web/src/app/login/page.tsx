@@ -19,6 +19,18 @@ function LoginForm() {
     params.get("error") === "confirmation" ? "That confirmation link didn’t work. Try signing in, or request a new one." : null,
   );
   const [info, setInfo] = useState<string | null>(null);
+  const [unconfirmed, setUnconfirmed] = useState<string | null>(null); // address still waiting for its confirmation
+  const emailRedirectTo = () => `${window.location.origin}/auth/callback`;
+
+  async function resend() {
+    if (!unconfirmed || busy) return;
+    setBusy(true);
+    setError(null);
+    const { error } = await getSupabase().auth.resend({ type: "signup", email: unconfirmed, options: { emailRedirectTo: emailRedirectTo() } });
+    setBusy(false);
+    if (error) return setError(error.message);
+    toast.success("Confirmation email sent again");
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -29,6 +41,7 @@ function LoginForm() {
       const sb = getSupabase();
       if (mode === "signin") {
         const { error } = await sb.auth.signInWithPassword({ email, password });
+        if (error?.code === "email_not_confirmed") setUnconfirmed(email);
         if (error) throw error;
         router.replace("/");
         router.refresh();
@@ -36,14 +49,15 @@ function LoginForm() {
         const { data, error } = await sb.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+          options: { emailRedirectTo: emailRedirectTo() },
         });
         if (error) throw error;
         if (data.session) {
           router.replace("/");
           router.refresh();
         } else {
-          setInfo("Check your email to confirm your account, then sign in.");
+          setInfo(`We sent a confirmation link to ${email}. Open it to finish creating your account. Check spam if it isn’t there.`);
+          setUnconfirmed(email);
           toast.info("Check your email to confirm your account");
           setMode("signin");
         }
@@ -92,6 +106,11 @@ function LoginForm() {
 
         {error && <p role="alert" className="text-sm text-danger">{error}</p>}
         {info && <p role="status" className="text-sm text-accent">{info}</p>}
+        {unconfirmed && (
+          <button type="button" onClick={() => void resend()} disabled={busy} className="text-sm font-medium text-accent underline disabled:opacity-50">
+            Resend confirmation email
+          </button>
+        )}
 
         <button
           type="submit"
@@ -114,6 +133,8 @@ function LoginForm() {
         onClick={() => {
           setMode(mode === "signin" ? "signup" : "signin");
           setError(null);
+          setInfo(null);
+          setUnconfirmed(null);
         }}
         className="mt-6 text-center text-sm text-muted"
       >
