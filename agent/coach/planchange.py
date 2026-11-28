@@ -87,6 +87,15 @@ def _sets(n: int | None) -> str | None:
     return None if n is None or 1 <= n <= 10 else "Sets must be between 1 and 10."
 
 
+def _day_view(session: dict[str, Any]) -> dict[str, Any]:
+    items = sorted(session.get("planned_exercises") or [], key=lambda i: i.get("sort_order", 0))
+    return {
+        "day": session["day_of_week"],
+        "session": f"{_day(session)} · {session['name']}",
+        "rows": [{"id": i["id"], "name": i["exercises"]["name"], "detail": f"{i['planned_sets']} × {i['rep_target']}", "status": "same"} for i in items],
+    }
+
+
 async def build_plan_change(sb: UserSupabase, changes: list[PlanChange]) -> tuple[dict[str, Any], str, list[str]] | str:
     """(payload, summary, preview lines) for a valid request, or one sentence saying what is wrong. Never raises on bad input."""
     if not 1 <= len(changes) <= MAX_CHANGES:
@@ -107,12 +116,14 @@ async def build_plan_change(sb: UserSupabase, changes: list[PlanChange]) -> tupl
     summaries: list[str] = []
     touched: set[str] = set()
     added: set[tuple[str, str]] = set()
+    views: dict[str, dict[str, Any]] = {}  # session id -> the whole day, so the user sees each change in context
 
     for c in changes:
         session = _find_session(sessions, c.session)
         if isinstance(session, str):
             return session
         where = f"{_day(session)[:3]} · {session['name']}"
+        view = views.setdefault(session["id"], _day_view(session))
         problem = _sets(c.sets) or _reps(c.rep_min, c.rep_max)
         if problem:
             return problem
@@ -135,6 +146,7 @@ async def build_plan_change(sb: UserSupabase, changes: list[PlanChange]) -> tupl
             out.append({"op": "add", "session_id": session["id"], "exercise_id": ex["id"], "planned_sets": sets, "rep_target": target,
                         "rep_min": lo, "rep_max": hi, "is_timed": bool(ex["is_timed"])})
             preview.append(f"+ {where}: {ex['name']} {sets} × {target}")
+            view["rows"].append({"id": None, "name": ex["name"], "detail": f"{sets} × {target}", "status": "added"})
             summaries.append(f"Add {ex['name']} to {_day(session)}")
             continue
 
@@ -165,6 +177,8 @@ async def build_plan_change(sb: UserSupabase, changes: list[PlanChange]) -> tupl
             out.append({"op": "replace", "planned_id": item["id"], "expected_exercise_id": item["exercise_id"], "exercise_id": ex["id"],
                         "is_timed": bool(ex["is_timed"]), **keep})
             preview.append(f"~ {where}: {old} → {ex['name']}")
+            row = next(r for r in view["rows"] if r["id"] == item["id"])
+            row.update(name=ex["name"], detail=f"{item['planned_sets']} × {keep['rep_target']}", status="replaced", was=f"{old} · {row['detail']}")
             summaries.append(f"Swap {old} for {ex['name']} on {_day(session)}")
             continue
 
@@ -182,7 +196,16 @@ async def build_plan_change(sb: UserSupabase, changes: list[PlanChange]) -> tupl
         out.append({"op": "edit", "planned_id": item["id"], "expected_exercise_id": item["exercise_id"], "planned_sets": sets,
                     "rep_target": target, "rep_min": lo, "rep_max": hi})
         preview.append(f"~ {where}: {old} {item['planned_sets']} × {item['rep_target']} → {sets} × {target}")
+        row = next(r for r in view["rows"] if r["id"] == item["id"])
+        row.update(detail=f"{sets} × {target}", status="changed", was=row["detail"])
         summaries.append(f"Change {old} on {_day(session)}")
 
     summary = summaries[0] if len(summaries) == 1 else f"{len(summaries)} changes to your plan"
-    return {"changes": out}, summary, preview
+    payload = {
+        "changes": out,
+        # what was asked for, so a later message can adjust it, and the days as they will look, for the approval card
+        "request": [c.model_dump(exclude_defaults=True) for c in changes],
+        "view": [{"session": v["session"], "rows": [{k: x for k, x in r.items() if k != "id"} for r in v["rows"]]}
+                 for v in sorted(views.values(), key=lambda v: v["day"])],
+    }
+    return payload, summary, preview

@@ -20,6 +20,11 @@ type Msg = { id: string; role: "user" | "assistant"; content: string; failed?: b
 
 export type Agent = "coach" | "nutrition";
 
+// messageId ties a card to the reply that proposed it, so it appears right there; cards loaded after a refresh have none
+type Shown = CoachProposal & { messageId?: string };
+
+const REVIEW_QUESTION = "Look at my weekly review. What, if anything, should I change in my plan?";
+
 export type ChatScreenProps = {
   agent: Agent;
   title: string;
@@ -42,7 +47,7 @@ export function ChatScreen({ agent, title, subtitle, heading, intro, starters, p
   const [confirmClear, setConfirmClear] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [chips, setChips] = useState<string[]>([]); // next-step suggestions for the latest reply; not stored
-  const [proposals, setProposals] = useState<CoachProposal[]>([]); // changes the coach has asked for, waiting for a decision
+  const [proposals, setProposals] = useState<Shown[]>([]); // changes the coach has asked for, waiting for a decision
   const [deciding, setDeciding] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true); // keep following the reply only while the reader is near the bottom
@@ -71,7 +76,7 @@ export function ChatScreen({ agent, title, subtitle, heading, intro, starters, p
     if (!isSupabaseConfigured) return;
     void getSupabase()
       .from("agent_proposals")
-      .select("id,kind,summary,preview,expires_at,status")
+      .select("id,kind,summary,preview,expires_at,status,view:payload->view")
       .eq("status", "pending")
       .gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: true })
@@ -79,6 +84,15 @@ export function ChatScreen({ agent, title, subtitle, heading, intro, starters, p
         if (data?.length) setProposals((cur) => [...data.filter((p) => !cur.some((c) => c.id === p.id)), ...cur]);
       });
   }, []);
+
+  // The weekly review's "Discuss with Coach" button lands here: fill the box, and let the user press send.
+  useEffect(() => {
+    if (agent !== "coach" || new URLSearchParams(window.location.search).get("ask") !== "review") return;
+    // The query string only exists in the browser, so it is read after mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDraft(REVIEW_QUESTION);
+    window.history.replaceState(null, "", window.location.pathname);
+  }, [agent]);
 
   // Wake the service (Render's free tier sleeps when idle) as soon as the tab opens.
   useEffect(() => {
@@ -168,7 +182,11 @@ export function ChatScreen({ agent, title, subtitle, heading, intro, starters, p
           } else if (ev.type === "tool_done") {
             patch((x) => ({ ...x, steps: x.steps?.map((t) => (t.id === ev.id ? { ...t, done: true } : t)) }));
           } else if (ev.type === "proposal") {
-            setProposals((cur) => (cur.some((p) => p.id === ev.proposal.id) ? cur : [...cur, ev.proposal]));
+            const retired = new Set(ev.proposal.replaces ?? []);
+            setProposals((cur) => [
+              ...cur.filter((p) => p.id !== ev.proposal.id).map((p) => (retired.has(p.id) && p.status === "pending" ? { ...p, status: "replaced" as const } : p)),
+              { ...ev.proposal, messageId: aid },
+            ]);
           } else if (ev.type === "suggestions") {
             setChips(ev.items);
           } else if (ev.type === "card") {
@@ -239,6 +257,10 @@ export function ChatScreen({ agent, title, subtitle, heading, intro, starters, p
       /* clipboard can be blocked; nothing to recover */
     }
   }
+
+  const renderProposal = (p: Shown) => (
+    <ProposalCard key={p.id} proposal={p} deciding={deciding === p.id} onDecide={(approve) => void decide(p.id, approve)} />
+  );
 
   const empty = messages !== null && messages.length === 0;
 
@@ -346,6 +368,7 @@ export function ChatScreen({ agent, title, subtitle, heading, intro, starters, p
                 <CoachCardView card={card} />
               </div>
             ))}
+            {proposals.filter((p) => p.messageId === m.id).map(renderProposal)}
             {m.role === "assistant" && m.content && !(busy && m.id === messages[messages.length - 1].id) && (
               <button onClick={() => void copy(m)} className="tag rounded-lg px-2 py-1 text-muted active:text-ink">
                 {copied === m.id ? "Copied" : "Copy"}
@@ -358,12 +381,9 @@ export function ChatScreen({ agent, title, subtitle, heading, intro, starters, p
         )}
       </div>
 
-      {proposals.length > 0 && (
-        <div className="mt-4 space-y-3">
-          {proposals.map((p) => (
-            <ProposalCard key={p.id} proposal={p} deciding={deciding === p.id} onDecide={(approve) => void decide(p.id, approve)} />
-          ))}
-        </div>
+      {/* cards whose reply isn't on screen (loaded after a refresh, or the reply failed) */}
+      {proposals.some((p) => !messages?.some((m) => m.id === p.messageId)) && (
+        <div className="mt-4 space-y-3">{proposals.filter((p) => !messages?.some((m) => m.id === p.messageId)).map(renderProposal)}</div>
       )}
 
       {chips.length > 0 && !busy && !error && (

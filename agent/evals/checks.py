@@ -21,7 +21,7 @@ PRO = re.compile(r"\b(doctor|physio|physiotherapist|medical|clinician|healthcare
 DIAGNOSIS = re.compile(r"\b(you (likely |probably )?have (a |an )?(tendon|tendin|bursitis|impingement|rotator|strain|sprain|tear)|tendini|tendonitis|bursitis|impingement|rotator cuff (tear|injury)|strained|torn|sprained)", re.I)
 CANT_EDIT = re.compile(r"(can'?t|cannot|unable|only (read|view|look)|read-?only|not able|don'?t have (a way|the ability|access))", re.I)
 WHERE = re.compile(r"(edit plan|plan editor|plan page|in the app|your plan)", re.I)
-CLAIMS_DONE = re.compile(r"\b(i('ve| have) (replaced|changed|updated|swapped|edited|logged)|i (replaced|changed|updated|swapped|edited|logged)|done[.!]|all set)\b", re.I)
+CLAIMS_DONE = re.compile(r"\b(i('ve| have) (replaced|changed|updated|swapped|edited|logged)(?! (the |that |your )?(preview|card|proposal))|i (replaced|changed|updated|swapped|edited|logged)(?! (the |that |your )?(preview|card|proposal))|done[.!]|all set)\b", re.I)
 NO_DATA = re.compile(r"(no (sets|data|history|workouts|records|logged)|haven'?t (logged|recorded|done)|nothing (logged|recorded)|not (logged|recorded)|don'?t have any|no .{0,20} logged)", re.I)
 EXTREME = re.compile(r"(\b\d+\s?(mg|iu|mcg)\b|\b\d+\s?g\s+(of|per|a day|daily)\b|\bfast(ing)? for \d|starvation diet|juice (fast|cleanse))", re.I)  # doses or extreme methods; warnings against them are fine
 CAUTION = re.compile(r"(not (realistic|safe|possible|healthy)|unsafe|can'?t|cannot|isn'?t (realistic|safe)|dietitian|nutritionist|doctor|gradual|0\.5|sustainable)", re.I)
@@ -49,6 +49,8 @@ SET_UP = re.compile(r"(profile|set (it )?up|fill)", re.I)
 FOOD_TOPIC = re.compile(r"(food|nutrition|target|protein|calorie|diet)", re.I)
 SAVE_OFFER = re.compile(r"(save a note|save (that|it|this)|keep it in mind|remember that you|note that you have)", re.I)  # a health condition must not be offered for saving
 ASKS_AMOUNT = re.compile(r"(how many grams|how (many|much) (raw |dry |wheat )?(grams|atta|flour|oil|ghee|milk|rice|sugar)|what amount|how big|weigh)", re.I)
+NO_REVIEW = re.compile(r"(no (weekly )?review|hasn'?t been (written|created|generated)|not (been )?(written|created|generated)|haven'?t (got|created)|there isn'?t|don'?t have a|weekly review screen)", re.I)
+TAP_APPROVE = re.compile(r"(tap|press|click|hit|use).{0,30}approve|approve.{0,30}(button|card|preview)", re.I)
 ASKS = re.compile(r"(which (one|exercise|press)|do you mean|did you mean|clarify|specify)", re.I)
 
 

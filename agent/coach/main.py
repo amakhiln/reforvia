@@ -26,6 +26,7 @@ from .analyst import PushSend, build_analyst_graph, last_completed_week, make_we
 from .agents import AGENTS, AgentSpec
 from .auth import AuthError, authenticate
 from .cards import card_for, proposal_for
+from .pending import load_pending, pending_block
 from .proposals import decide
 from .config import Settings
 from .graph import build_graph
@@ -208,7 +209,8 @@ def create_app(
 
         memories = await load_memories(sb)  # the user's notes; empty if the database hiccups, never a failed chat
         earlier = await load_summary(sb) if spec.summary else ""  # what scrolled out of the window; empty if none or the database hiccups
-        cfg = {"configurable": {"sb": sb, "tz": tz, "user_id": user_id, "memories": memories, "summary": earlier}, "recursion_limit": 14}
+        pending = await load_pending(sb) if spec.name == "coach" else None  # so the user can adjust it by chatting
+        cfg = {"configurable": {"sb": sb, "tz": tz, "user_id": user_id, "memories": memories, "summary": earlier, "pending": pending}, "recursion_limit": 14}
 
         async def stream() -> AsyncIterator[str]:
             buf: list[str] = []
@@ -300,7 +302,7 @@ def create_app(
             # nor the Coach's own instructions? Only logged, never blocked. It runs while the reply is being saved.
             sources = [
                 _text(msg.content) or str(msg.content) for msg in (final or {}).get("messages", []) if isinstance(msg, ToolMessage)
-            ] + [r["content"] for r in rows] + [build_system_prompt(today, tz, memory_block(memories) + summary_block(earlier))]
+            ] + [r["content"] for r in rows] + [build_system_prompt(today, tz, memory_block(memories) + summary_block(earlier) + pending_block(pending))]
             check = asyncio.create_task(asyncio.to_thread(ungrounded, answer, sources, body.message))
             await question_saved()  # the question is stored before the reply
             try:

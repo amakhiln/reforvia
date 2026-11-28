@@ -58,6 +58,27 @@ FOODS = [
 FOODS[3]["energy_derived"] = False
 FOODS[4]["energy_derived"] = True
 
+def _review(today: date) -> dict:
+    return {
+        "week_start": (monday(today) - timedelta(weeks=1)).isoformat(),
+        "content": "Two of three sessions done\n\nLegs were skipped. Next week, get the Thursday session in.",
+        "stats": {
+            "sessions": 2, "planned_sessions": 3, "volume_kg": 7400, "prev_volume_kg": 9800, "trained_days": [1, 2], "plan_days": [1, 2, 4],
+            "lifts": [{"exercise": "Lat pulldown", "sets": 3, "new_best": True, "best_e1rm_kg": 63.3, "prior_best_e1rm_kg": 63.0},
+                      {"exercise": "Seated cable row (neutral grip)", "sets": 3, "new_best": False},
+                      {"exercise": "Incline dumbbell press", "sets": 3, "new_best": False}],
+            "targets": [{"exercise": "Seated cable row (neutral grip)", "kind": "hold", "next_load_kg": 42.5, "target_reps": 11, "plan": "3 × 10–12"}],
+        },
+    }
+
+
+# a plan change the user has not answered yet, as the app would have stored it
+PENDING = {
+    "id": "22222222-2222-4222-8222-222222222222",
+    "preview": ["+ Thu · Legs: Hip thrust 3 × 8–12", "~ Mon · Pull A: Lat pulldown 3 × 8–12 → 4 × 8–12"],
+    "payload": {"request": [{"op": "add", "session": "Thursday", "exercise": "Hip thrust"}, {"op": "edit", "session": "Monday", "exercise": "Lat pulldown", "sets": 4}]},
+}
+
 PROFILES = {
     "adult": dict(birth_year=date.today().year - 30, sex="male", height_cm=178, weight_kg=80, goal="maintain", diet="vegetarian", see_professional=False),
     "flagged": dict(birth_year=date.today().year - 30, sex="female", height_cm=165, weight_kg=60, goal="lose", diet="any", see_professional=True),
@@ -107,7 +128,8 @@ def _e1rm(load: float, reps: int) -> float | None:
 
 
 class Fixture:
-    def __init__(self, today: date | None = None, profile: str = "adult"):
+    def __init__(self, today: date | None = None, profile: str = "adult", review: bool = True, pending: bool = False):
+        self.has_review, self.pending = review, pending
         self.profile = PROFILES[profile]
         self.stored: list[tuple[str, dict]] = []
         self.today = today or date.today()
@@ -174,6 +196,7 @@ class Fixture:
                 "weekly_summary": lambda: self.weekly(int(body["p_weeks"]), date.fromisoformat(body["p_today"])),
                 "personal_records": lambda: self.records(),
                 "search_foods": lambda: self.search_foods(body["q"], int(body.get("lim", 8))),
+                "reject_proposal": lambda: {"id": body["p_id"], "status": "rejected"},
             }[name]()
             return httpx.Response(200, json=data)
         table = path.rsplit("/", 1)[1]
@@ -197,6 +220,13 @@ class Fixture:
     def _t_foods(self, params: dict) -> list[dict]:
         code = params.get("code", "").removeprefix("eq.")
         return [f for f in FOODS if f["code"] == code][:1]
+
+    def _t_weekly_summaries(self, _: dict) -> list[dict]:
+        return [_review(self.today)] if self.has_review else []
+
+    def _t_agent_proposals(self, params: dict) -> list[dict]:
+        waiting = [PENDING] if self.pending else []
+        return [p for p in waiting if params.get("id") != f"neq.{p['id']}"]
 
     def _t_nutrition_profile(self, _: dict) -> list[dict]:
         return [self.profile] if self.profile else []
@@ -236,7 +266,7 @@ class Fixture:
         return []
 
 
-def make_supabase(today: date | None = None, profile: str = "adult") -> tuple[UserSupabase, Fixture]:
-    fx = Fixture(today, profile)
+def make_supabase(today: date | None = None, profile: str = "adult", review: bool = True, pending: bool = False) -> tuple[UserSupabase, Fixture]:
+    fx = Fixture(today, profile, review, pending)
     client = httpx.AsyncClient(transport=httpx.MockTransport(fx.handle))
     return UserSupabase("https://fixture.local", "key", "token", client), fx

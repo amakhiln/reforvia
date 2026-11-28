@@ -10,7 +10,13 @@ export type CoachCard =
   | { kind: "targets"; calories: number; protein_g: number; fat_g: number; carbs_g: number; goal: "lose" | "maintain" | "gain"; expected_change_kg_per_week: number; maintenance_kcal: number; floor_applied: boolean }
   | { kind: "food"; food: string; grams: number; energy_kcal: number; protein_g: number; fat_g: number; carbs_g: number; fibre_g: number; energy_derived: boolean };
 
-export type ProposalStatus = "pending" | "applied" | "rejected" | "expired" | "failed";
+export type ProposalStatus = "pending" | "applied" | "rejected" | "expired" | "failed" | "replaced";
+
+/** A training day as it will look if the change is approved. Built by the server from the real plan. */
+export type DayPreview = {
+  session: string;
+  rows: { name: string; detail: string; status: "same" | "added" | "replaced" | "changed"; was?: string }[];
+};
 
 /** A change the Coach has asked to make. Nothing happens until the user approves it on the card. */
 export type CoachProposal = {
@@ -19,6 +25,8 @@ export type CoachProposal = {
   summary: string;
   preview: string[];
   expires_at: string;
+  view?: DayPreview[] | null; // plan changes only
+  replaces?: string[]; // ids of older cards this one supersedes
   status: ProposalStatus;
 };
 
@@ -39,6 +47,7 @@ const TOOL_LABELS: Record<string, string> = {
   get_exercise_guide: "Looking up form cues",
   get_exercise_progress: "Analysing your progress",
   get_weekly_volume: "Checking your weekly volume",
+  get_weekly_review: "Reading your weekly review",
   get_personal_bests: "Checking your personal bests",
   propose_memory: "Preparing a note to save",
   propose_plan_change: "Preparing a plan change",

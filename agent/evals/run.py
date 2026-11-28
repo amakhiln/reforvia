@@ -26,10 +26,11 @@ from coach.config import Settings
 from coach.agents import AGENTS
 from coach.graph import build_graph
 from coach.memory import load_memories
+from coach.pending import load_pending, pending_block
 from coach.llm import build_model
 
 from .cases import CASES, Case, Ctx
-from .fixture import make_supabase
+from .fixture import PENDING, make_supabase
 
 DEFAULT_MODELS = [
     "anthropic/claude-sonnet-5.5:low",
@@ -68,7 +69,8 @@ def load_prices() -> dict[str, tuple[float, float]]:
 
 
 def score(case: Case, answer: str, tool_calls: list[str], tool_results: dict[str, str], tool_texts: list[str]) -> list[dict]:
-    tool_texts = tool_texts + [AGENTS[case.agent].prompt(datetime.now().date(), "UTC", "")]  # numbers the agent is told in its own instructions
+    shown = pending_block(PENDING) if case.pending else ""  # the waiting change is part of the instructions too
+    tool_texts = tool_texts + [AGENTS[case.agent].prompt(datetime.now().date(), "UTC", shown)]  # numbers the agent is told in its own instructions
     ctx = Ctx(case.question, answer.replace("’", "'").replace("‘", "'"), tool_calls, tool_results, tool_texts)
     out = []
     for chk in case.checks:
@@ -81,9 +83,9 @@ def score(case: Case, answer: str, tool_calls: list[str], tool_results: dict[str
 
 
 async def run_case(settings: Settings, case: Case, model=None) -> dict:
-    sb, _ = make_supabase(profile=case.profile)
+    sb, _ = make_supabase(profile=case.profile, review=case.review, pending=case.pending)
     graph = build_graph(model or build_model(settings, streaming=True), AGENTS[case.agent])  # `model` lets tests inject a scripted one
-    cfg = {"configurable": {"sb": sb, "tz": "Asia/Kolkata", "user_id": "eval-user", "memories": await load_memories(sb)}, "recursion_limit": 14}
+    cfg = {"configurable": {"sb": sb, "tz": "Asia/Kolkata", "user_id": "eval-user", "memories": await load_memories(sb), "pending": await load_pending(sb) if case.agent == "coach" else None}, "recursion_limit": 14}
     t0, first, tin, tout, state, error = time.perf_counter(), None, 0, 0, None, None
     try:
         async for mode, payload in graph.astream({"messages": [HumanMessage(content=case.question)]}, config=cfg, stream_mode=["messages", "values"]):

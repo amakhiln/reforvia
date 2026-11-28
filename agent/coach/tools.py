@@ -14,6 +14,7 @@ from langchain_core.tools import tool
 
 from .memory import KINDS, resolve
 from .nutrition import targets as nutrition_targets
+from .pending import supersede
 from .planchange import PlanChange, build_plan_change
 from .progression import suggest_next
 from .proposals import create_proposal
@@ -253,13 +254,38 @@ async def propose_memory(text: str, kind: str = "fact", replaces: str = "", conf
 
 @tool
 async def propose_plan_change(changes: list[PlanChange], config: RunnableConfig = None) -> str:  # type: ignore[assignment]
-    """Offer a change to the user's weekly plan: add an exercise to a session, replace one exercise with another, or edit the sets or rep range of one. Up to 5 changes, applied together. This only shows the user an Approve button; the plan is not changed until they approve it. It cannot remove or reorder exercises, create days or sessions, or set weights."""
+    """Offer a change to the user's weekly plan: add an exercise to a session, replace one exercise with another, or edit the sets or rep range of one. Up to 5 changes, applied together. This only shows the user a preview with an Approve button; the plan is not changed until they approve it. A new proposal REPLACES any plan change still waiting, so include every change that should remain. It cannot remove or reorder exercises, create days or sessions, or set weights."""
     built = await build_plan_change(_sb(config), changes)
     if isinstance(built, str):
         return _json({"error": built})
     payload, summary, preview = built
     card = await create_proposal(_sb(config), config["configurable"]["user_id"], "plan_change", payload, summary, preview)
-    return _json({"proposal": card, "message": "Shown to the user as a card. The plan is NOT changed until they tap Approve, so tell them it is waiting for their approval."})
+    retired = await supersede(_sb(config), card["id"])  # only after the new one is safely stored
+    if retired:
+        card["replaces"] = retired
+    return _json({"proposal": card, "message": "Shown to the user as a preview. The plan is NOT changed until they tap Approve, so tell them it is waiting for their approval and that they can ask you to adjust it first."})
+
+
+@tool
+async def get_weekly_review(config: RunnableConfig = None) -> str:  # type: ignore[assignment]
+    """The user's latest weekly review: sessions against plan, volume against the week before, days trained and skipped, new bests, and the next-week loads. Use it when they ask about their review or what to change in their plan based on it."""
+    rows = await _sb(config).select("weekly_summaries", {"select": "week_start,content,stats", "order": "week_start.desc", "limit": "1"})
+    if not rows:
+        return _json({"review": None, "message": "No weekly review has been written yet. The user can create one on the Weekly review screen."})
+    row, st = rows[0], rows[0].get("stats") or {}
+    trained, planned = st.get("trained_days") or [], st.get("plan_days") or []
+    lifts = st.get("lifts") or []
+    return _json({
+        "week_of": row["week_start"],
+        "note": row["content"],
+        "sessions": st.get("sessions"), "planned_sessions": st.get("planned_sessions"),
+        "volume_kg": st.get("volume_kg"), "previous_week_volume_kg": st.get("prev_volume_kg"),
+        "days_trained": [DAY_NAMES[d - 1] for d in trained],
+        "planned_days_skipped": [DAY_NAMES[d - 1] for d in planned if d not in trained],
+        "new_bests": [{"exercise": x["exercise"], "est_1rm_kg_before": x.get("prior_best_e1rm_kg"), "est_1rm_kg_now": x.get("best_e1rm_kg")} for x in lifts if x.get("new_best")],
+        "sets_per_exercise": [{"exercise": x["exercise"], "sets": x.get("sets")} for x in lifts],
+        "next_week_loads": st.get("targets") or [],  # loads are shown on the workout screen; the plan does not store them
+    })
 
 
 FOOD_FIELDS = "id,code,name,food_group,energy_kcal,energy_derived,protein_g,fat_g,carbs_g,fibre_g,sugars_g,sat_fat_g,calcium_mg,iron_mg,sodium_mg,potassium_mg,vitamin_c_mg"
@@ -308,7 +334,7 @@ async def portion_nutrition(code: str, grams: float, config: RunnableConfig = No
     return _json({"food": f["name"], "code": f["code"], "grams": g, "energy_derived": f["energy_derived"], **{k: round(float(f[k]) * scale, 1) for k in keys}})
 
 
-TOOLS = [propose_plan_change, propose_memory, get_my_plan, get_recent_workouts, find_exercise, get_exercise_guide, get_exercise_progress, get_weekly_volume, get_personal_bests]
+TOOLS = [propose_plan_change, get_weekly_review, propose_memory, get_my_plan, get_recent_workouts, find_exercise, get_exercise_guide, get_exercise_progress, get_weekly_volume, get_personal_bests]
 
 TOOL_LABELS = {
     "get_my_plan": "Checking your plan",
@@ -320,6 +346,7 @@ TOOL_LABELS = {
     "get_personal_bests": "Checking your personal bests",
     "propose_memory": "Preparing a note to save",
     "propose_plan_change": "Preparing a plan change",
+    "get_weekly_review": "Reading your weekly review",
     "get_nutrition_targets": "Working out your targets",
     "search_foods": "Searching foods",
     "portion_nutrition": "Calculating the portion",

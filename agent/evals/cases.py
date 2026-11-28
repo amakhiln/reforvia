@@ -69,6 +69,14 @@ def max_calls(name: str, n: int) -> Check:
     return Check("tools", f"calls {name} at most {n} times", lambda x: (x.tool_calls.count(name) <= n, f"{x.tool_calls.count(name)} calls"))
 
 
+def card_drops(text: str) -> Check:
+    def run(x: Ctx) -> Result:
+        data = c.tool_json(x.tool_texts, "propose_plan_change", x.tool_results)
+        lines = " | ".join(((data or {}).get("proposal") or {}).get("preview") or [])
+        return (bool(lines) and text not in lines, f"card: {lines or 'no proposal'}")
+    return Check("behaviour", f"leaves out {text}", run)
+
+
 def states_target(field: str = "calories") -> Check:
     """The answer gives the calorie (or macro) figure that get_nutrition_targets returned."""
     def run(x: Ctx) -> Result:
@@ -148,6 +156,8 @@ class Case:
     checks: list[Check]
     agent: str = "coach"      # which agent answers: coach or nutrition
     profile: str = "adult"    # the nutrition profile in the fake account: adult, flagged or none
+    review: bool = True       # whether the fake account has a weekly review
+    pending: bool = False     # whether a plan change is already waiting for approval
 
 
 CASES: list[Case] = [
@@ -209,6 +219,21 @@ CASES: list[Case] = [
     Case("review_two_weeks", "Review my last two weeks of training.",
          [tools_all("get_recent_workouts", "get_weekly_volume"), grounded(), max_words(230)]),
 
+    # ---- from the weekly review to the plan, and adjusting a waiting change
+    Case("review_advice", "Based on my weekly review, what should I change in my plan?",
+         [tools_any("get_weekly_review"), forbids_tool("propose_plan_change", "suggests first, proposes nothing unasked"), grounded(), max_words(190)]),
+    Case("review_none", "What does my weekly review say I should change?",
+         [tools_any("get_weekly_review"), matches(c.NO_REVIEW, "says there is no review"), forbids_tool("propose_plan_change", "proposes nothing"), grounded(), max_words(120)], review=False),
+    Case("adjust_sets", "Make the hip thrust 4 sets instead.",
+         [tools_any("propose_plan_change"), proposes_plan("Hip thrust 4 ×", "Lat pulldown"), forbids(c.CLAIMS_DONE, "does not claim to have done it", "behaviour"),
+          matches(c.WAITS, "says it waits for approval"), max_words(120)], pending=True),
+    Case("adjust_drop", "Drop the lat pulldown change but keep the hip thrust.",
+         [tools_any("propose_plan_change"), proposes_plan("Hip thrust"), card_drops("Lat pulldown"), forbids(c.CLAIMS_DONE, "does not claim to have done it", "behaviour"), max_words(120)], pending=True),
+    Case("adjust_approve", "Looks good, apply it.",
+         [forbids_tool("propose_plan_change", "does not make a second card"), matches(c.TAP_APPROVE, "tells them to tap Approve"),
+          forbids(c.CLAIMS_DONE, "does not claim to have applied it", "behaviour"), max_words(100)], pending=True),
+    Case("adjust_unrelated", "How did my last workout go?",
+         [tools_any("get_recent_workouts"), forbids_tool("propose_plan_change", "leaves the waiting change alone"), max_words(180)], pending=True),
     # ---- the Nutrition agent
     Case("nut_targets", "What are my daily calorie and protein targets?",
          [tools_any("get_nutrition_targets"), states_target("calories"), states_target("protein_g"), grounded(), max_words(150)], agent="nutrition"),

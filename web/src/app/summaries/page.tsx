@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "@yusufceng1z/ding-react";
 import { AppShell, ErrorNotice, InlineSpinner, Spinner } from "@/components/AppShell";
@@ -24,7 +25,7 @@ function split(content: string): { headline: string; body: string } {
   return { headline: first.replace(/[*_#`]/g, "").trim(), body: rest.join("\n").trim() };
 }
 
-function Summary({ s, open }: { s: WeeklySummary; open?: boolean }) {
+function Summary({ s, open, latest }: { s: WeeklySummary; open?: boolean; latest?: boolean }) {
   const { headline, body } = split(s.content);
   const st = s.stats ?? {};
   return (
@@ -39,6 +40,11 @@ function Summary({ s, open }: { s: WeeklySummary; open?: boolean }) {
       <div className="space-y-4 border-t border-line p-4 text-[15px]">
         {body && <RichText text={body} />}
         <WeekReview st={st} />
+        {latest && (
+          <Link href="/coach?ask=review" className="tag flex h-11 items-center justify-center rounded-xl border border-accent text-accent">
+            Discuss with Coach
+          </Link>
+        )}
       </div>
     </details>
   );
@@ -160,7 +166,7 @@ export default function SummariesPage() {
       )}
 
       <div className="space-y-3">
-        {items?.map((s, i) => <Summary key={s.id} s={s} open={i === 0} />)}
+        {items?.map((s, i) => <Summary key={s.id} s={s} open={i === 0} latest={i === 0} />)}
       </div>
     </AppShell>
   );

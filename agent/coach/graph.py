@@ -12,6 +12,7 @@ from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from .memory import memory_block
+from .pending import pending_block
 from .agents import COACH, AgentSpec
 from .summary import summary_block
 
@@ -26,7 +27,7 @@ def build_graph(model: BaseChatModel, spec: AgentSpec = COACH):
         except Exception:
             tz, today = "UTC", datetime.utcnow().date()
         cfg = config.get("configurable") or {}
-        notes = memory_block(cfg.get("memories") or []) + summary_block(cfg.get("summary") or "")
+        notes = memory_block(cfg.get("memories") or []) + summary_block(cfg.get("summary") or "") + pending_block(cfg.get("pending"))
         messages = [SystemMessage(content=spec.prompt(today, tz, notes)), *state["messages"]]
         return {"messages": [await llm.ainvoke(messages, config)]}
 
