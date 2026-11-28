@@ -7,6 +7,8 @@ import { toast } from "@yusufceng1z/ding-react";
 import { AppShell, ErrorNotice, InlineSpinner, SetupNotice, Spinner } from "@/components/AppShell";
 import { Dial } from "@/components/Dial";
 import { ResetWeek } from "@/components/ResetWeek";
+import { SkipControl } from "@/components/SkipControl";
+import { dateInWeek, skipFor, type Skip } from "@/lib/skips";
 import { ChevronIcon } from "@/components/icons";
 import { DAY_NAMES, formatLongDate, isoWeekday, localISO, startOfWeekISO } from "@/lib/dates";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -20,6 +22,7 @@ export function TodayClient() {
   const pathname = usePathname();
   const [sessions, setSessions] = useState<ProgramSession[] | null>(null);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
+  const [skips, setSkips] = useState<Skip[] | null>(null); // null until loaded, or if the database has no skip table yet
   const [error, setError] = useState<string | null>(null);
   // Next keeps this view alive when you open a workout, so "busy" must come from live state that ends by itself:
   // `starting` while the workout is created, `navigating` until the next screen has rendered.
@@ -50,6 +53,9 @@ export function TodayClient() {
       if (wErr) throw wErr;
       setSessions((s ?? []) as ProgramSession[]);
       setWorkouts((w ?? []) as Workout[]);
+      // Separate from the main load on purpose: without migration 0026 the screen still works, just with no skip control.
+      const marks = await sb.from("session_skips").select("id,session_id,session_name,skipped_on,reason").gte("skipped_on", startOfWeekISO());
+      setSkips(marks.error ? null : ((marks.data ?? []) as Skip[]));
 
       // Warm up today's workouts so tapping one opens instantly.
       const todayIds = new Set(((s ?? []) as ProgramSession[]).filter((x) => x.day_of_week === today).map((x) => x.id));
@@ -142,16 +148,27 @@ export function TodayClient() {
                 <p className="mt-1 text-sm text-muted">Nothing planned. Recovery is part of the program.</p>
               </div>
             ) : (
-              [...todays, ...todaysOptional].map((s) => (
-                <SessionHero
-                  key={s.id}
-                  session={s}
-                  workout={workoutFor.get(s.id)}
-                  busy={busyId === s.id}
-                  locked={busyId !== null}
-                  onOpen={() => open(s)}
-                />
-              ))
+              [...todays, ...todaysOptional].map((s) => {
+                const skip = skips ? skipFor(skips, s) : undefined;
+                const done = Boolean(workoutFor.get(s.id)?.finished_at);
+                return (
+                  <div key={s.id} className="space-y-2">
+                    <SessionHero
+                      session={s}
+                      workout={workoutFor.get(s.id)}
+                      skipped={Boolean(skip) && !done}
+                      busy={busyId === s.id}
+                      locked={busyId !== null}
+                      onOpen={() => open(s)}
+                    />
+                    {skips && !done && !s.is_optional && (
+                      <div className="px-1">
+                        <SkipControl session={s} date={dateInWeek(startOfWeekISO(), s.day_of_week)} skip={skip} onChanged={load} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </section>
 
@@ -165,7 +182,10 @@ export function TodayClient() {
             <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface">
               {sessions.map((s) => {
                 const w = workoutFor.get(s.id);
-                const status = w?.finished_at ? "Done" : w ? "In progress" : s.day_of_week === today ? "Today" : "";
+                const skip = skips && !w?.finished_at ? skipFor(skips, s) : undefined;
+                const status = w?.finished_at ? "Done" : skip ? "Skipped" : w ? "In progress" : s.day_of_week === today ? "Today" : "";
+                // today's sessions have the control under their card above; here it is for earlier days of this week
+                const skippable = skips !== null && !s.is_optional && !w?.finished_at && s.day_of_week < today;
                 return (
                   <li key={s.id}>
                     <button
@@ -193,6 +213,11 @@ export function TodayClient() {
                       )}
                       {busyId === s.id ? <InlineSpinner className="text-muted" /> : <ChevronIcon className="-rotate-90 text-muted" />}
                     </button>
+                    {skippable && (
+                      <div className="pb-3 pl-20 pr-4">
+                        <SkipControl session={s} date={dateInWeek(startOfWeekISO(), s.day_of_week)} skip={skip} onChanged={load} />
+                      </div>
+                    )}
                   </li>
                 );
               })}
@@ -219,35 +244,39 @@ const plural = (n: number) => `${n} ${n === 1 ? "exercise" : "exercises"}`;
 export function SessionHero({
   session,
   workout,
+  skipped = false,
   busy,
   locked,
   onOpen,
 }: {
   session: ProgramSession;
   workout?: Workout;
+  skipped?: boolean;
   busy: boolean;
   locked: boolean;
   onOpen: () => void;
 }) {
   const done = Boolean(workout?.finished_at);
-  const label = done ? "View workout" : workout ? "Resume workout" : session.kind === "cardio" ? "Start cardio" : "Start workout";
+  const quiet = done || skipped; // nothing left to push for: the card steps back
+  const label = done ? "View workout" : workout ? "Resume workout" : skipped ? "Train anyway" : session.kind === "cardio" ? "Start cardio" : "Start workout";
   return (
-    <div className={`rounded-3xl p-5 ${done ? "border border-line bg-surface" : "bg-accent text-accent-ink"}`}>
+    <div className={`rounded-3xl p-5 ${quiet ? "border border-line bg-surface" : "bg-accent text-accent-ink"}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className={`tag ${done ? "text-muted" : "opacity-75"}`}>
+          <p className={`tag ${quiet ? "text-muted" : "opacity-75"}`}>
             {session.is_optional ? "Optional session" : "Scheduled session"}
           </p>
           <p className="mt-3 text-3xl font-semibold uppercase leading-none tracking-tight">{session.name}</p>
-          <p className={`tag mt-3 ${done ? "text-muted" : "opacity-75"}`}>{plural(session.planned_exercises[0]?.count ?? 0)}</p>
+          <p className={`tag mt-3 ${quiet ? "text-muted" : "opacity-75"}`}>{plural(session.planned_exercises[0]?.count ?? 0)}</p>
         </div>
         {done && <span className="tag rounded-md bg-accent-soft px-2 py-1 text-accent">Done</span>}
+        {skipped && <span className="tag rounded-md bg-surface-2 px-2 py-1 text-muted">Skipped</span>}
       </div>
       <button
         onClick={onOpen}
         disabled={locked}
         className={`tag mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border-2 text-sm disabled:opacity-60 ${
-          done ? "border-line text-ink" : "border-accent-ink text-accent-ink"
+          quiet ? "border-line text-ink" : "border-accent-ink text-accent-ink"
         }`}
       >
         {busy ? (

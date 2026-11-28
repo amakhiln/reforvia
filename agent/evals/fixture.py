@@ -222,6 +222,9 @@ class Fixture:
         code = params.get("code", "").removeprefix("eq.")
         return [f for f in FOODS if f["code"] == code][:1]
 
+    def _t_session_skips(self, _: dict) -> list[dict]:
+        return []
+
     def _t_weekly_summaries(self, _: dict) -> list[dict]:
         return [_review(self.today)] if self.has_review else []
 

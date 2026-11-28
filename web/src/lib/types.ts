@@ -127,6 +127,9 @@ export type WeeklySummary = {
     extra_sessions?: number; // optional sessions and repeats
     missed_sessions?: string[];
     missed_days?: number[];
+    // added by migration 0026: planned sessions the user marked as skipped
+    skipped_sessions?: { session: string; reason: "rest" | "sick" | "injury" | "busy" | "travel" | null }[];
+    skipped_days?: number[];
     lifts?: {
       exercise: string;
       top_load_kg: number | null;

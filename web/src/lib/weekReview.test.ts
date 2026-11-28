@@ -14,6 +14,11 @@ test("a session moved to another day does not mark its usual day as skipped", ()
   assert.equal(weekCells([1], [1, 2], [])[1].state, "rest"); // nothing missed at all
 });
 
+test("a day marked skipped shows as skipped, unless something was trained that day", () => {
+  const states = weekCells([1, 3], [1, 2, 3, 4], [4], [2, 3]).map((c) => c.state);
+  assert.deepEqual(states.slice(0, 4), ["trained", "skipped", "trained", "missed"]);
+});
+
 test("wins list new bests first, then heavier loads, without repeating a lift", () => {
   const lift = (exercise: string, o: object) => ({ exercise, top_load_kg: 50, best_e1rm_kg: null, prior_best_e1rm_kg: null, last_week_top_load_kg: null, new_best: false, ...o });
   const out = wins([

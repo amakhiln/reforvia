@@ -110,7 +110,7 @@ async def get_my_plan(config: RunnableConfig) -> str:
 
 @tool
 async def get_recent_workouts(limit: int = 5, config: RunnableConfig = None) -> str:  # type: ignore[assignment]
-    """The user's most recent logged workouts with every set (load x reps), reps-in-reserve and notes. limit is 1-10."""
+    """The user's most recent logged workouts with every set (load x reps), reps-in-reserve and notes, plus any days they marked as skipped. limit is 1-10."""
     sb = _sb(config)
     n = max(1, min(int(limit), 10))
     rows = await sb.select(
@@ -135,7 +135,12 @@ async def get_recent_workouts(limit: int = 5, config: RunnableConfig = None) -> 
                 item["note"] = we["notes"]
             exs.append(item)
         out.append({"date": w["performed_on"], "session": w["session_name"], "finished": bool(w.get("finished_at")), "exercises": exs})
-    return _json({"workouts": out}) if out else _json({"workouts": [], "message": "No workouts logged yet."})
+    try:  # days the user marked as skipped; an older database without the table just means none
+        skips = await sb.select("session_skips", {"select": "skipped_on,session_name,reason", "order": "skipped_on.desc", "limit": str(n)})
+    except SupabaseError:
+        skips = []
+    extra = {"days_marked_skipped": [{"date": k["skipped_on"], "session": k["session_name"], "reason": k.get("reason")} for k in skips]} if skips else {}
+    return _json({"workouts": out, **extra}) if out else _json({"workouts": [], "message": "No workouts logged yet.", **extra})
 
 
 @tool
@@ -281,6 +286,7 @@ async def get_weekly_review(config: RunnableConfig = None) -> str:  # type: igno
         "sessions": st.get("sessions"), "planned_sessions": st.get("planned_sessions"),
         # absent on reviews written before these were counted; 'sessions' then includes optional ones
         "planned_sessions_done": st.get("planned_done"), "extra_sessions": st.get("extra_sessions"), "missed_sessions": st.get("missed_sessions"),
+        "sessions_marked_skipped": st.get("skipped_sessions"),  # skipped on purpose, with the user's reason if given
         "volume_kg": st.get("volume_kg"), "previous_week_volume_kg": st.get("prev_volume_kg"),
         "days_trained": [DAY_NAMES[d - 1] for d in trained],
         "planned_days_skipped": [DAY_NAMES[d - 1] for d in (st["missed_days"] if "missed_days" in st else [d for d in planned if d not in trained])],
