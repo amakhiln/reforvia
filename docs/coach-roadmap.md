@@ -102,3 +102,7 @@ A third agent for food and targets, with its own prompt, tools and tab. Numbers 
 - **Known limits of that data:** it lists raw ingredients, not cooked dishes (no roti or cooked dal), so dishes need a separate, clearly labelled estimate from ingredient weights. 14 fat-only foods had no energy and are worked out from their macros (marked `energy_derived`). Two rows (lemon juice, chicken leg) report energy far from their macros and are flagged, not changed. Check the tables' terms of use before shipping.
 - **Then:** a profile and a deterministic targets calculator, a read-only Q&A agent with a food-search tool and the safety rails (no crash diets, a calorie floor, referrals for medical conditions, eating-disorder signals and under-18s), then food logging through the approval card, then a line in the weekly review.
 - **Supervisor:** one chat that routes to the Coach or the Nutrition agent comes after the two agents are tested on their own.
+
+## Weekly review to plan changes
+
+*Built on branch `coach-review-plan`, no migration.* The Coach can read the latest weekly review (`get_weekly_review`) and suggests changes tied to its numbers, proposing only when asked. A plan change shows in the chat as the whole day with the changed rows marked. The user can adjust it by chatting: the new preview replaces the waiting one, and only one plan change can be waiting at a time. Nothing applies until Approve. The review screen has a "Discuss with Coach" button that fills in the question without sending it.

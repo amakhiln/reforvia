@@ -33,7 +33,10 @@ async def create_proposal(
         "expires_at": (datetime.now(timezone.utc) + TTL).isoformat(),
     }
     await sb.insert("agent_proposals", row)
-    return {k: row[k] for k in ("id", "kind", "summary", "preview", "expires_at")}
+    card = {k: row[k] for k in ("id", "kind", "summary", "preview", "expires_at")}
+    if payload.get("view"):
+        card["view"] = payload["view"]
+    return card
 
 
 async def decide(sb: UserSupabase, proposal_id: str, approve: bool) -> dict[str, Any] | None:

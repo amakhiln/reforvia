@@ -38,6 +38,7 @@ FALLBACK: dict[str, list[str]] = {
     "get_personal_bests": ["Review my last two weeks of training", "Am I doing enough weekly volume?"],
     "get_my_plan": ["What should I lift next session?", "How should I warm up?"],
     "get_exercise_guide": ["How has this lift progressed?", "What should I lift next session?"],
+    "get_weekly_review": ["What should I change in my plan?", "What should I lift next session?"],
     "get_nutrition_targets": ["How are these worked out?", "Which foods are high in protein?"],
     "search_foods": ["How much protein is in a portion?", "Which foods are high in protein?"],
     "portion_nutrition": ["Which foods are high in protein?", "What are my daily targets?"],

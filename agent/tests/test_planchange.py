@@ -59,7 +59,8 @@ def test_rep_target_wording_matches_the_plan_screen():
 
 async def test_add_uses_the_plan_screens_defaults_and_shows_the_diff():
     payload, summary, preview = await build({"op": "add", "session": "Thursday", "exercise": "hip thrust"})
-    assert payload == {"changes": [{"op": "add", "session_id": LEGS, "exercise_id": "ex-hip", "planned_sets": 3, "rep_target": "8–12",
+    assert payload["request"] == [{"op": "add", "session": "Thursday", "exercise": "hip thrust"}]
+    assert {"changes": payload["changes"]} == {"changes": [{"op": "add", "session_id": LEGS, "exercise_id": "ex-hip", "planned_sets": 3, "rep_target": "8–12",
                                     "rep_min": 8, "rep_max": 12, "is_timed": False}]}
     assert summary == "Add Hip thrust to Thursday" and preview == ["+ Thu · Legs: Hip thrust 3 × 8–12"]
 

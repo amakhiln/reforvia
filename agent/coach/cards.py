@@ -55,5 +55,6 @@ def proposal_for(result: str) -> dict[str, Any] | None:
     data = _load(result)
     prop = (data or {}).get("proposal")
     if isinstance(prop, dict) and prop.get("id") and prop.get("kind") and prop.get("summary"):
-        return {k: prop.get(k) for k in ("id", "kind", "summary", "preview", "expires_at")}
+        card = {k: prop.get(k) for k in ("id", "kind", "summary", "preview", "expires_at")}
+        return {**card, **{k: prop[k] for k in ("view", "replaces") if prop.get(k)}}
     return None
