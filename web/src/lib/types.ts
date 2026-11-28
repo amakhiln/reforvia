@@ -122,6 +122,11 @@ export type WeeklySummary = {
     // added by migration 0015; older reviews do not have these and show the simpler layout
     trained_days?: number[]; // ISO weekdays, 1 = Monday
     plan_days?: number[];
+    // added by migration 0025; older reviews do not have these
+    planned_done?: number; // planned sessions completed, on any day
+    extra_sessions?: number; // optional sessions and repeats
+    missed_sessions?: string[];
+    missed_days?: number[];
     lifts?: {
       exercise: string;
       top_load_kg: number | null;
