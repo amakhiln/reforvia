@@ -41,3 +41,14 @@ test("a candidate's main muscle beats one that only touches it, and rear/pec dec
   ]);
   assert.equal(out[0].id, "3");
 });
+
+test("when equipment is missing, other equipment for the same muscle comes first", () => {
+  const out = suggestAlternatives(
+    lat, // no equipment listed: "pulldown" implies cable
+    [lat, ex("c", "Close-grip cable lat pulldown", "Lats, Biceps"), ex("p", "Pull-up", "Lats, Biceps"), ex("d", "Dumbbell curl", "Biceps")],
+    [],
+    4,
+    true,
+  );
+  assert.deepEqual(out.map((e) => e.id), ["p", "c", "d"]);
+});

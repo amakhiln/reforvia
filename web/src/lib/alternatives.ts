@@ -52,7 +52,9 @@ export const groupTerms = (group: string) => GROUPS.find((g) => g.group === grou
 
 const kinds = (ex: Ex) => {
   const text = `${ex.name} ${ex.equipment ?? ""}`;
-  return EQUIPMENT.filter(([, re]) => re.test(text)).map(([k]) => k);
+  const found = EQUIPMENT.filter(([, re]) => re.test(text)).map(([k]) => k);
+  // "Lat pulldown" and "Rope triceps pushdown" name no equipment, but need a cable.
+  return found.length === 0 && /pull[\s-]?down|push[\s-]?down/i.test(text) ? ["cable"] : found;
 };
 
 const moves = (name: string) => {
@@ -82,13 +84,22 @@ export function score(cur: Ex, c: Ex): number {
   return s;
 }
 
-/** Best alternatives first; never the exercise itself or ones already in the session. Always returns up to `n` when the pool has them. */
-export function suggestAlternatives(cur: Ex, pool: Ex[], taken: string[] = [], n = 4): Ex[] {
+/**
+ * Best alternatives first; never the exercise itself or ones already in the session. Always returns up to `n` when the pool has them.
+ * `otherKit` is for missing equipment: among exercises for the same main muscle, ones needing something else come first.
+ */
+export function suggestAlternatives(cur: Ex, pool: Ex[], taken: string[] = [], n = 4, otherKit = false): Ex[] {
   const skip = new Set([cur.id, ...taken]);
+  const main = muscleGroups(cur.main_muscles)[0];
+  const tier = (c: Ex) => {
+    if (!otherKit) return 0;
+    if (muscleGroups(c.main_muscles)[0] !== main) return 0;
+    return shared(kinds(cur), kinds(c)) > 0 ? 1 : 2;
+  };
   return pool
     .filter((c) => !skip.has(c.id))
-    .map((c) => ({ c, s: score(cur, c) }))
-    .sort((a, b) => b.s - a.s || a.c.name.localeCompare(b.c.name))
+    .map((c) => ({ c, t: tier(c), s: score(cur, c) }))
+    .sort((a, b) => b.t - a.t || b.s - a.s || a.c.name.localeCompare(b.c.name))
     .slice(0, n)
     .map((x) => x.c);
 }

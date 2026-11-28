@@ -6,6 +6,7 @@ export type Exercise = {
   form_instructions: string | null;
   common_mistakes: string | null;
   alternatives: string | null;
+  equipment?: string | null;
   video_url: string | null;
   is_timed: boolean;
   source?: string;
@@ -27,6 +28,8 @@ export type ExerciseMedia = {
 
 export type PlannedExercise = {
   id: string;
+  session_id: string;
+  exercise_id: string;
   planned_sets: number;
   rep_target: string;
   rep_min: number | null;
