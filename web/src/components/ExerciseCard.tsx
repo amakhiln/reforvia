@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { BookIcon, CheckIcon, ChevronIcon, ExternalIcon, PencilIcon, PlusIcon } from "./icons";
+import { BookIcon, CheckIcon, ChevronIcon, PencilIcon, PlusIcon } from "./icons";
 import { ExerciseEditor, type ExerciseEdits } from "./ExerciseEditor";
-import { ExerciseMedia } from "./ExerciseMedia";
+import { ExerciseDetails } from "./ExerciseDetails";
 import { SetRow, type SetValues } from "./SetRow";
 import { formatShortDate } from "@/lib/dates";
 import { formatKg, placeholderForSet, suggestNext } from "@/lib/progression";
@@ -202,23 +202,8 @@ export function ExerciseCard(props: Props) {
               <BookIcon className="size-4 text-accent" /> Form guide
               <ChevronIcon className="ml-auto size-4 text-muted transition-transform group-open:rotate-180" />
             </summary>
-            <div className="space-y-3 border-t border-line px-3.5 py-3 text-sm">
-              <GuideRow label="Main muscles" value={ex.main_muscles} />
-              <GuideRow label="Purpose" value={ex.purpose} />
-              <GuideRow label="How to" value={ex.form_instructions} />
-              <GuideRow label="Avoid" value={ex.common_mistakes} />
-              <GuideRow label="No equipment? Try" value={ex.alternatives} />
-              <ExerciseMedia exercise={ex} />
-              {ex.video_url && (
-                <a
-                  href={ex.video_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 font-medium text-accent"
-                >
-                  Watch a demo <ExternalIcon className="size-4" />
-                </a>
-              )}
+            <div className="border-t border-line px-3.5 py-3">
+              <ExerciseDetails exercise={ex} />
             </div>
           </details>
 
@@ -238,16 +223,6 @@ export function ExerciseCard(props: Props) {
         </div>
       )}
     </section>
-  );
-}
-
-function GuideRow({ label, value }: { label: string; value: string | null }) {
-  if (!value) return null;
-  return (
-    <div>
-      <p className="tag text-muted">{label}</p>
-      <p className="mt-0.5 leading-relaxed">{value}</p>
-    </div>
   );
 }
 
