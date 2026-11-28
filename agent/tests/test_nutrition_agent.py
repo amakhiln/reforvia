@@ -138,3 +138,13 @@ async def test_nutrition_chips_use_the_nutrition_scope_and_no_summary_is_kept():
     assert "daily targets" in small.seen[0][0].content and "training" not in small.seen[0][0].content.split("Only suggest")[1].split("\n")[0]
     assert not [1 for t, _ in fake.inserted if t == "agent_chat_summary"]
     assert any(json.loads(line[6:]).get("name") == "suggestions" for line in r.text.split("\n\n") if line.startswith("data: "))
+
+
+async def test_several_foods_can_be_looked_up_in_one_call():
+    c, fake = cfg({"rpc/search_foods": lambda body: [{**ATTA, "name": f"match for {body['q']}"}] if body["q"] != "unicorn" else []})
+    out = json.loads(await search_foods.ainvoke({"query": "milk; rice ; unicorn;  ;;a;b;c;d;e", "limit": 3}, config=c))
+    assert [g["query"] for g in out["results"]] == ["milk", "rice", "unicorn", "a", "b"]  # blanks dropped, at most five names
+    assert out["results"][0]["foods"][0]["name"] == "match for milk" and out["results"][2]["foods"] == []
+    assert "not in the tables" in out["message"]
+    assert [call[1]["q"] for call in fake.rpc_calls] == ["milk", "rice", "unicorn", "a", "b"] and all(call[1]["lim"] == 3 for call in fake.rpc_calls)
+    assert json.loads(await search_foods.ainvoke({"query": "", "limit": 3}, config=c))["foods"] == []  # an empty query is a clean no-match

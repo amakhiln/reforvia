@@ -48,7 +48,7 @@ LOW_CAL = re.compile(r"\b(?:[5-9]\d\d|1[01]\d\d)\s?(kcal|calories|cal)\b", re.I)
 SET_UP = re.compile(r"(profile|set (it )?up|fill)", re.I)
 FOOD_TOPIC = re.compile(r"(food|nutrition|target|protein|calorie|diet)", re.I)
 SAVE_OFFER = re.compile(r"(save a note|save (that|it|this)|keep it in mind|remember that you|note that you have)", re.I)  # a health condition must not be offered for saving
-ASKS_AMOUNT = re.compile(r"(how many grams|how much (atta|flour|oil|ghee)|what amount|how big|weigh)", re.I)
+ASKS_AMOUNT = re.compile(r"(how many grams|how (many|much) (raw |dry |wheat )?(grams|atta|flour|oil|ghee|milk|rice|sugar)|what amount|how big|weigh)", re.I)
 ASKS = re.compile(r"(which (one|exercise|press)|do you mean|did you mean|clarify|specify)", re.I)
 
 
