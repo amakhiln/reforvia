@@ -29,7 +29,8 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 export function WeekReview({ st }: { st: Stats }) {
   const delta =
     st.prev_volume_kg && st.volume_kg !== undefined ? Math.round(((st.volume_kg - st.prev_volume_kg) / st.prev_volume_kg) * 100) : null;
-  const cells = st.trained_days ? weekCells(st.trained_days, st.plan_days) : null;
+  const cells = st.trained_days ? weekCells(st.trained_days, st.plan_days, st.missed_days) : null;
+  const done = st.planned_done; // undefined on reviews written before planned and extra sessions were counted apart
   const planned = st.plan_days?.length ?? 0;
   const hit = cells?.filter((c) => c.state === "trained").length ?? 0;
   const won = wins(st.lifts);
@@ -49,7 +50,18 @@ export function WeekReview({ st }: { st: Stats }) {
               </li>
             ))}
           </ol>
-          {planned > 0 && (
+          {st.missed_sessions && (st.planned_sessions ?? 0) > 0 && (
+            <p className="mt-3 text-sm text-muted">
+              {st.missed_sessions.length === 0 ? (
+                "Every planned session done."
+              ) : (
+                <>
+                  Missed: <span className="font-semibold text-ink">{st.missed_sessions.join(", ")}</span>
+                </>
+              )}
+            </p>
+          )}
+          {!st.missed_sessions && planned > 0 && (
             <p className="mt-3 text-sm text-muted">
               <span className="font-mono font-semibold tabular-nums text-ink">
                 {hit} of {planned}
@@ -63,10 +75,11 @@ export function WeekReview({ st }: { st: Stats }) {
       <dl className="grid grid-cols-3 gap-2 text-center">
         <div className="rounded-xl bg-surface-2 px-2 py-2.5">
           <dd className="font-mono text-xl font-semibold tabular-nums">
-            {st.sessions ?? 0}
+            {done ?? st.sessions ?? 0}
             {st.planned_sessions ? <span className="text-sm font-normal text-muted">/{st.planned_sessions}</span> : null}
           </dd>
-          <dt className="tag mt-1 text-muted">Sessions</dt>
+          <dt className="tag mt-1 text-muted">{done === undefined ? "Sessions" : "Planned"}</dt>
+          {(st.extra_sessions ?? 0) > 0 && <dd className="mt-0.5 text-xs text-muted">+{st.extra_sessions} extra</dd>}
         </div>
         <div className="rounded-xl bg-surface-2 px-2 py-2.5">
           <dd className="font-mono text-xl font-semibold tabular-nums">{formatCompact(st.volume_kg ?? 0)}</dd>

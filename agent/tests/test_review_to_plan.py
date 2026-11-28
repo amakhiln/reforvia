@@ -118,3 +118,17 @@ async def test_the_chat_shows_the_coach_the_waiting_change_and_the_nutrition_age
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://coach") as c:
             await c.post("/chat", json={"message": "make it 4 sets", "agent": agent}, headers={"authorization": "Bearer good-token"})
         assert ("A plan change is waiting" in model.seen[0][0].content) is expected
+
+
+async def test_review_tool_uses_the_corrected_counts_when_a_review_has_them():
+    stats = {**REVIEW["stats"], "sessions": 5, "planned_done": 4, "extra_sessions": 1, "missed_sessions": ["Cardio"], "trained_days": [1, 3], "missed_days": [5]}
+    sb, _ = sb_for({"weekly_summaries": [{**REVIEW, "stats": stats}]})
+    out = json.loads(await get_weekly_review.ainvoke({}, config=cfg(sb)))
+    assert (out["planned_sessions_done"], out["extra_sessions"], out["missed_sessions"]) == (4, 1, ["Cardio"])
+    assert out["planned_days_skipped"] == ["Friday"]  # Tuesday and Thursday had no workout, but their sessions were done
+
+
+def test_the_analyst_is_told_to_judge_by_planned_sessions_done():
+    from coach.analyst import ANALYST_PROMPT
+
+    assert "planned_done" in ANALYST_PROMPT and "missed_sessions" in ANALYST_PROMPT and "never by the total" in ANALYST_PROMPT

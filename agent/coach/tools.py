@@ -279,9 +279,11 @@ async def get_weekly_review(config: RunnableConfig = None) -> str:  # type: igno
         "week_of": row["week_start"],
         "note": row["content"],
         "sessions": st.get("sessions"), "planned_sessions": st.get("planned_sessions"),
+        # absent on reviews written before these were counted; 'sessions' then includes optional ones
+        "planned_sessions_done": st.get("planned_done"), "extra_sessions": st.get("extra_sessions"), "missed_sessions": st.get("missed_sessions"),
         "volume_kg": st.get("volume_kg"), "previous_week_volume_kg": st.get("prev_volume_kg"),
         "days_trained": [DAY_NAMES[d - 1] for d in trained],
-        "planned_days_skipped": [DAY_NAMES[d - 1] for d in planned if d not in trained],
+        "planned_days_skipped": [DAY_NAMES[d - 1] for d in (st["missed_days"] if "missed_days" in st else [d for d in planned if d not in trained])],
         "new_bests": [{"exercise": x["exercise"], "est_1rm_kg_before": x.get("prior_best_e1rm_kg"), "est_1rm_kg_now": x.get("best_e1rm_kg")} for x in lifts if x.get("new_best")],
         "sets_per_exercise": [{"exercise": x["exercise"], "sets": x.get("sets")} for x in lifts],
         "next_week_loads": st.get("targets") or [],  # loads are shown on the workout screen; the plan does not store them

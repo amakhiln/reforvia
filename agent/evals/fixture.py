@@ -63,7 +63,8 @@ def _review(today: date) -> dict:
         "week_start": (monday(today) - timedelta(weeks=1)).isoformat(),
         "content": "Two of three sessions done\n\nLegs were skipped. Next week, get the Thursday session in.",
         "stats": {
-            "sessions": 2, "planned_sessions": 3, "volume_kg": 7400, "prev_volume_kg": 9800, "trained_days": [1, 2], "plan_days": [1, 2, 4],
+            "sessions": 2, "planned_sessions": 3, "planned_done": 2, "extra_sessions": 0, "missed_sessions": ["Legs"], "missed_days": [4],
+            "volume_kg": 7400, "prev_volume_kg": 9800, "trained_days": [1, 2], "plan_days": [1, 2, 4],
             "lifts": [{"exercise": "Lat pulldown", "sets": 3, "new_best": True, "best_e1rm_kg": 63.3, "prior_best_e1rm_kg": 63.0},
                       {"exercise": "Seated cable row (neutral grip)", "sets": 3, "new_best": False},
                       {"exercise": "Incline dumbbell press", "sets": 3, "new_best": False}],
