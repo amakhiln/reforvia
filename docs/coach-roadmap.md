@@ -109,4 +109,4 @@ A third agent for food and targets, with its own prompt, tools and tab. Numbers 
 
 ## Marking a day as skipped
 
-*Built on branch `skip-day`, migration 0026.* On the Today screen a planned session (today's, or an earlier day this week) can be marked "didn't train", with an optional reason (rest, busy, sick, injury, travel) and an undo. The weekly review lists it as skipped, not missed; the Coach sees it; doing the session later overrides the mark. Not built: marking days in past weeks, skips in History, moving a session to another day.
+*Built on branch `skip-day`, migration 0026.* On the Today screen a planned session (today's, or an earlier day this week) can be marked "didn't train", with an optional reason (rest, busy, sick, injury, travel) and an undo. The weekly review lists it as skipped, not missed; the Coach sees it; doing the session later overrides the mark. Optional sessions can be marked too; the weekly review does not list those, since the plan never expected them. Not built: marking days in past weeks, skips in History, moving a session to another day.

@@ -13,6 +13,7 @@ import { ChevronIcon } from "@/components/icons";
 import { DAY_NAMES, formatLongDate, isoWeekday, localISO, startOfWeekISO } from "@/lib/dates";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getSupabase } from "@/lib/supabase/client";
+import { weekProgress } from "@/lib/weekProgress";
 import { startWorkout } from "@/lib/workouts";
 import { prefetchBundle, primeBundle } from "@/lib/workoutBundle";
 import type { ProgramSession, Workout } from "@/lib/types";
@@ -116,8 +117,7 @@ export function TodayClient() {
     router.refresh();
   }
 
-  const plannedCount = sessions?.filter((s) => !s.is_optional).length ?? 0;
-  const doneCount = new Set(workouts.filter((w) => w.finished_at && w.session_id).map((w) => w.session_id)).size;
+  const progress = weekProgress(sessions ?? [], workouts);
   const todays = sessions?.filter((s) => s.day_of_week === today && !s.is_optional) ?? [];
   const todaysOptional = sessions?.filter((s) => s.day_of_week === today && s.is_optional) ?? [];
 
@@ -138,7 +138,7 @@ export function TodayClient() {
       {sessions && (
         <div className="space-y-8">
           <section aria-label="Week progress" className="rounded-3xl border border-line bg-surface py-6">
-            <Dial done={doneCount} total={plannedCount} label="Sessions this week" />
+            <Dial done={progress.done} total={progress.total} label="Sessions this week" />
           </section>
 
           <section aria-label="Today’s session" className="space-y-3">
@@ -161,7 +161,7 @@ export function TodayClient() {
                       locked={busyId !== null}
                       onOpen={() => open(s)}
                     />
-                    {skips && !done && !s.is_optional && (
+                    {skips && !done && (
                       <div className="px-1">
                         <SkipControl session={s} date={dateInWeek(startOfWeekISO(), s.day_of_week)} skip={skip} onChanged={load} />
                       </div>
@@ -185,7 +185,7 @@ export function TodayClient() {
                 const skip = skips && !w?.finished_at ? skipFor(skips, s) : undefined;
                 const status = w?.finished_at ? "Done" : skip ? "Skipped" : w ? "In progress" : s.day_of_week === today ? "Today" : "";
                 // today's sessions have the control under their card above; here it is for earlier days of this week
-                const skippable = skips !== null && !s.is_optional && !w?.finished_at && s.day_of_week < today;
+                const skippable = skips !== null && !w?.finished_at && s.day_of_week < today;
                 return (
                   <li key={s.id}>
                     <button
